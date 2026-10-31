@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Warehouse &amp; pipeline glossary — Factory Data Lab</title>
+<link rel="stylesheet" href="../assets/course.css"></head>
+<body><main class="glossary-layout" id="main"><p><a href="../index.html#field-notes">Back to the visual syllabus</a></p>
+<h1>Warehouse &amp; pipeline glossary</h1><p>A quick reference for the ice cream factory project. Define the grain before choosing the tool.</p>
+<p>Learn these through the project; do not memorize the entire table before starting. The modeling vocabulary follows <a href="https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/">Kimball</a><a href="https://www.kimballgroup.com/2008/11/fact-tables/">r2</a>; loading behavior follows <a href="https://dlthub.com/docs/general-usage/incremental-loading">dlt</a>; physical key behavior follows <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">ClickHouse</a>. Operational targets below are course proposals, not universal standards. Local setup follows <a href="https://docs.python.org/3/tutorial/venv.html">Python environments</a> and <a href="https://docs.astral.sh/uv/guides/projects/">uv project structure</a>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Working definition / factory example</th>
+</tr>
+</thead>
+<tbody>
+<tr id="glossary-virtual-environment">
+<td>Virtual environment</td>
+<td>An isolated Python environment for installed packages; this course uses uv-managed <code>.venv</code>, separate from system Python</td>
+</tr>
+<tr id="glossary-dependency-lockfile">
+<td>Dependency lockfile</td>
+<td>A tool-managed record of resolved dependencies used to recreate an environment; <code>uv.lock</code> is not the installed environment or a full-stack compatibility test</td>
+</tr>
+<tr id="glossary-data-pipeline">
+<td>Data pipeline</td>
+<td>Repeatable steps moving and processing data from a source to a useful destination</td>
+</tr>
+<tr id="glossary-data-warehouse">
+<td>Data warehouse</td>
+<td>Integrated, historically useful analytical data organized for answering business questions</td>
+</tr>
+<tr id="glossary-oltp">
+<td>OLTP</td>
+<td>Transaction-oriented work: recording an order or stock movement in MySQL</td>
+</tr>
+<tr id="glossary-olap">
+<td>OLAP</td>
+<td>Analysis-oriented work: aggregating a year of sales by product in ClickHouse</td>
+</tr>
+<tr id="glossary-etl-elt">
+<td>ETL / ELT</td>
+<td>Transform before loading / load before transforming; this course uses the latter</td>
+</tr>
+<tr id="glossary-batch-streaming">
+<td>Batch / streaming</td>
+<td>Process bounded groups periodically / process a continuing flow; latency requirements drive the choice</td>
+</tr>
+<tr id="glossary-raw-staging-mart">
+<td>Raw / staging / mart</td>
+<td>Source-oriented loaded data / cleaned and standardized models / business-ready models</td>
+</tr>
+<tr id="glossary-data-mart">
+<td>Data mart</td>
+<td>A focused analytical dataset for a subject or audience; can be a table or view within the warehouse, not the dashboard itself</td>
+</tr>
+<tr id="glossary-source-destination">
+<td>Source / destination</td>
+<td>The data read from / written to by a particular step; one step's destination can be another step's source</td>
+</tr>
+<tr id="glossary-grain">
+<td>Grain</td>
+<td>The precise meaning of one row; for example, one order line, not vaguely “sales data”</td>
+</tr>
+<tr id="glossary-fact-dimension">
+<td>Fact / dimension</td>
+<td>A measured business event or snapshot / descriptive context such as product or factory</td>
+</tr>
+<tr id="glossary-star-schema">
+<td>Star schema</td>
+<td>Fact tables connected to descriptive dimensions at explicitly declared grains</td>
+</tr>
+<tr id="glossary-conformed-dimension">
+<td>Conformed dimension</td>
+<td>A consistently defined dimension shared across processes, such as product in sales and production</td>
+</tr>
+<tr id="glossary-natural-surrogate-key">
+<td>Natural / surrogate key</td>
+<td>An identifier from the source / an identifier assigned for warehouse modeling</td>
+</tr>
+<tr id="glossary-scd-type-1-type-2">
+<td>SCD type 1 / type 2</td>
+<td>Overwrite an attribute / preserve versions with validity periods; type 2 requires correct historical lookup</td>
+</tr>
+<tr id="glossary-transaction-snapshot-fact">
+<td>Transaction / snapshot fact</td>
+<td>A row for an event / a row describing a state over a defined interval or at a defined time</td>
+</tr>
+<tr id="glossary-additive-semi-additive-measure">
+<td>Additive / semi-additive measure</td>
+<td>Can be summed over relevant dimensions / cannot be summed over some dimension, such as inventory over time</td>
+</tr>
+<tr id="glossary-full-incremental-load">
+<td>Full / incremental load</td>
+<td>Read all relevant source rows / read only a bounded set of new or changed rows</td>
+</tr>
+<tr id="glossary-cursor-watermark">
+<td>Cursor / watermark</td>
+<td>Column used to select progress / saved progress boundary; this is not a guarantee that every change was observed</td>
+</tr>
+<tr id="glossary-append-merge-replace">
+<td>Append / merge / replace</td>
+<td>Add rows / apply key-based changes / replace a selected destination scope; extraction and write mode are separate choices</td>
+</tr>
+<tr id="glossary-idempotency">
+<td>Idempotency</td>
+<td>Rerunning the same logical work does not duplicate facts or change the intended business answer</td>
+</tr>
+<tr id="glossary-cdc">
+<td>CDC</td>
+<td>Change data capture: changes, including deletes when supported, obtained from a change mechanism such as a database log; timestamp polling is not log-based CDC</td>
+</tr>
+<tr id="glossary-event-time-processing-time">
+<td>Event time / processing time</td>
+<td>When a stock movement happened / when the pipeline handled it</td>
+</tr>
+<tr id="glossary-late-arriving-data">
+<td>Late-arriving data</td>
+<td>A record arriving after its event-time period was already processed</td>
+</tr>
+<tr id="glossary-backfill">
+<td>Backfill</td>
+<td>Controlled processing of a past interval, without unintentionally changing normal incremental progress</td>
+</tr>
+<tr id="glossary-dag-asset-materialization">
+<td>DAG / asset / materialization</td>
+<td>A directed dependency graph / a meaningful data object / execution that produces or updates it</td>
+</tr>
+<tr id="glossary-data-contract-data-test">
+<td>Data contract / data test</td>
+<td>Agreed structure, semantics, and expectations / an executable check of those expectations</td>
+</tr>
+<tr id="glossary-lineage">
+<td>Lineage</td>
+<td>Traceable dependencies from source columns and models to a reported number</td>
+</tr>
+<tr id="glossary-freshness-completeness">
+<td>Freshness / completeness</td>
+<td>How recent relevant data is / whether the expected data is present; neither follows from a green run alone</td>
+</tr>
+<tr id="glossary-sli-slo">
+<td>SLI / SLO</td>
+<td>Measured service indicator / chosen target for it, such as age of the latest validated mart</td>
+</tr>
+<tr id="glossary-rpo-rto">
+<td>RPO / RTO</td>
+<td>Maximum acceptable data loss interval / maximum acceptable recovery time; backups must be restore-tested</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>ClickHouse trap:</strong> its primary key does not enforce uniqueness. A MySQL primary key, a dlt merge key, a dbt model's <code>unique_key</code>, and a ClickHouse sorting/primary key are not interchangeable guarantees. Test uniqueness explicitly. <a href="https://dlthub.com/docs/dlt-ecosystem/destinations/clickhouse">R6</a> <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">R9</a> <a href="https://docs.getdbt.com/docs/build/data-tests">R11</a></p>
+<footer class="page-footer"><p>Print with your browser’s Print command. <a href="../index.html#curriculum">Return to the roadmap.</a></p></footer></main></body></html>

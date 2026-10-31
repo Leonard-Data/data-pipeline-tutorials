@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lesson 2: verify a Windows/WSL machine, install Git and Docker Desktop as needed, and use uv for isolated Python and reproducible locked dependencies.">
+  <title>Lesson 2 · A workspace you can rebuild — Factory Data Lab</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/course.js" defer></script>
+  <script src="../assets/lesson.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the lesson</a>
+  <header class="site-header">
+    <a class="wordmark" href="../index.html">Factory <span>Data Lab</span></a>
+    <div class="header-links"><a href="0001-from-order-to-insight.html">Previous lesson</a><button type="button" data-print hidden>Print lesson</button></div>
+  </header>
+  <main class="lesson-shell" id="main">
+    <h1>A workspace<br>you can rebuild.</h1>
+    <ul class="course-meta" aria-label="Lesson information"><li>Lesson 2 · M1 / week 1</li><li>20–30 minutes active work</li><li>Downloads &amp; reboots add time</li></ul>
+    <p class="lede">Before moving factory orders, make sure you know which machine runs your tools—and how to recreate their Python environment.</p>
+    <p><strong>Your win:</strong> run isolated Python, repeat its dependency installation from a lockfile without deleting anything, and prove Docker can run a disposable container.</p>
+    <p class="intro-note">Your starting point: Windows / WSL, at least 16 GB RAM reported, Docker not installed, spending undecided. This page cannot inspect your computer. Read it offline; use the internet for official downloads and the smoke test. Run one block at a time in its labeled terminal; stop on an error. No paid cloud resources are needed.</p>
+    <nav class="lesson-jumps" aria-label="Lesson sections"><a href="#preflight">Check the machine</a><a href="#wsl">Prepare Ubuntu</a><a href="#create-project">Isolate Python</a><a href="#lock-replay">Replay the lock</a><a href="#docker">Verify Docker</a><a href="#practice">Recall</a><a href="#exit-report">Exit report</a></nav>
+
+    <section class="chapter" id="preflight" aria-labelledby="preflight-title">
+      <h2 id="preflight-title">Check the machine before changing it.</h2>
+      <p>The factory pipeline will eventually need Python processes and database containers. <strong>16 GB installed RAM does not mean 16 GB available to WSL</strong>, and it does not prove the whole stack will fit. Start with one small environment; run services selectively later.</p>
+      <div class="table-scroll"><table><caption>Record observations, not guesses</caption><thead><tr><th scope="col">Check</th><th scope="col">Where to look</th><th scope="col">Decision</th></tr></thead><tbody>
+        <tr><th scope="row">Windows &amp; CPU</th><td>Settings → System → About: edition, build, System type, installed RAM. Use <code>winver</code> below for version details.</td><td>Compare your exact build/architecture with <a href="https://docs.docker.com/desktop/setup/install/windows-install/#system-requirements">Docker’s current requirements</a>. WSL support alone does not prove Docker Desktop support. On Windows ARM, pause for an architecture-specific check before choosing an installer.</td></tr>
+        <tr><th scope="row">Virtualization</th><td>Task Manager → Performance → CPU → Virtualization.</td><td>Record Enabled/Disabled. If disabled or policy-managed, ask your administrator; do not change firmware settings blindly.</td></tr>
+        <tr><th scope="row">Disk space</th><td>File Explorer → This PC: free space on the drive that will store WSL/Docker.</td><td>Course planning allowance: keep at least 20 GB free for small later labs, not a vendor minimum or a growth guarantee. If below that, ask for a smaller plan; do not delete existing data.</td></tr>
+        <tr><th scope="row">Budget &amp; permission</th><td>Personal versus employer-managed use; <a href="https://docs.docker.com/desktop/setup/install/windows-install/#start-docker-desktop">Docker Desktop terms</a>.</td><td>Budget is deferred: provision nothing paid. Personal/educational use can qualify for free Desktop; professional/government use may require a subscription. Check eligibility and machine policy first.</td></tr>
+      </tbody></table></div>
+      <p class="margin-note" id="windows-check-label"><strong>PowerShell · inspection only</strong> — use a normal Windows PowerShell terminal. Do not paste these into Python.</p>
+      <pre data-terminal="powershell" aria-labelledby="windows-check-label"><code class="language-powershell">winver
+wsl --status
+wsl --version
+wsl --list --verbose</code></pre>
+      <p><strong>Check:</strong> save the Windows build and the WSL version separately. In the distribution list, Ubuntu should eventually show <strong>VERSION 2</strong>. “No distributions installed” or a missing WSL command means setup is still needed, not that you passed. Consult <a href="https://learn.microsoft.com/en-us/windows/wsl/install">Microsoft’s WSL guide</a>.</p>
+      <p class="margin-note"><strong>Stop gate:</strong> unsupported Windows build, unclear architecture, disabled virtualization, inadequate space, blocked administrator access, or licensing uncertainty. Send the specific obstacle to the teaching agent; do not bypass security policy to continue.</p>
+    </section>
+
+    <section class="chapter" id="wsl" aria-labelledby="wsl-title">
+      <h2 id="wsl-title">Two terminals. One development home.</h2>
+      <div class="table-scroll"><table><caption>Keep this boundary visible beside your terminal</caption><thead><tr><th scope="col">Windows / PowerShell</th><th scope="col">Ubuntu / WSL terminal</th></tr></thead><tbody><tr><td>Install/update WSL. Install and start Docker Desktop.</td><td>Run Git, uv, project Python, and Docker CLI commands.</td></tr><tr><td>Owns the physical drive and Windows permissions.</td><td>Store this lab under <code>~/factory-setup-lab</code>, in Linux home—not <code>/mnt/c</code>.</td></tr></tbody></table></div>
+      <p>WSL 2 runs a Linux environment on Windows. For Linux-container development, <a href="https://docs.docker.com/desktop/features/wsl/best-practices/">Docker recommends keeping bind-mounted source files in the Linux filesystem</a>. A folder’s name alone does not tell you which Python you are using.</p>
+      <details class="handbook" id="install-wsl"><summary>If Ubuntu / WSL 2 is not ready</summary><div class="handbook-body">
+        <p>Follow the <a href="https://learn.microsoft.com/en-us/windows/wsl/install">official install instructions</a>. For a new setup, open <strong>PowerShell as Administrator</strong> and run the installation command. Restart Windows when requested; then open Ubuntu and create its Linux username/password. The password entry may display no characters.</p>
+        <p class="margin-note" id="wsl-install-label"><strong>PowerShell · Administrator · only if Ubuntu is missing</strong></p>
+        <pre data-terminal="powershell" aria-labelledby="wsl-install-label"><code class="language-powershell">wsl --install -d Ubuntu</code></pre>
+        <p>For an existing installation, update WSL if needed, then inspect again. If an existing distribution shows VERSION 1, ask before converting it; never unregister or delete a distribution to fix this lesson.</p>
+        <p class="margin-note" id="wsl-update-label"><strong>PowerShell · update existing WSL</strong> — approve elevation only if Windows requires it.</p>
+        <pre data-terminal="powershell" aria-labelledby="wsl-update-label"><code class="language-powershell">wsl --update
+wsl --version
+wsl --list --verbose</code></pre>
+      </div></details>
+      <p><strong>Now open Ubuntu</strong>, not another PowerShell tab. Check the distribution, architecture, memory visible to Linux, and free space. Linux <code>df</code> can report virtual-disk capacity: still check real free space on the Windows host drive.</p>
+      <p class="margin-note" id="ubuntu-check-label"><strong>Ubuntu terminal · inspection only</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="ubuntu-check-label"><code class="language-bash">cat /etc/os-release
+uname -m
+free -h
+df -h "$HOME"</code></pre>
+      <h3>Install Git and uv here, not twice.</h3>
+      <p>First try <code>git --version</code> and <code>uv --version</code>. If a tool already works, do not reinstall it. For missing Git/download tools, use Ubuntu’s package manager, as described by <a href="https://git-scm.com/install/linux">Git’s installation guide</a>. Ubuntu’s <code>sudo</code> uses your Linux password; never share it.</p>
+      <p class="margin-note" id="git-install-label"><strong>Ubuntu terminal · installation if needed</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="git-install-label"><code class="language-bash">sudo apt-get update &amp;&amp;
+sudo apt-get install git curl ca-certificates</code></pre>
+      <p>If uv is missing, use <a href="https://docs.astral.sh/uv/getting-started/installation/">Astral’s official installer</a>. This downloads executable code: only proceed if you trust the publisher and your machine policy permits it. Save and inspect the same file you will execute; press <kbd>q</kbd> to leave <code>less</code>.</p>
+      <p class="margin-note" id="uv-download-label"><strong>Ubuntu terminal · download and inspect</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="uv-download-label"><code class="language-bash">uv_installer="$(mktemp)" &amp;&amp;
+curl -LsSf https://astral.sh/uv/install.sh -o "$uv_installer" &amp;&amp;
+less "$uv_installer"</code></pre>
+      <p>Only after the download/review succeeds, run the next command <strong>in that same Ubuntu terminal</strong>, without sudo. Then reopen Ubuntu so its PATH includes uv, and verify both tools.</p>
+      <p class="margin-note" id="uv-install-label"><strong>Ubuntu terminal · run the reviewed installer</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="uv-install-label"><code class="language-bash">sh "$uv_installer"</code></pre>
+      <p class="margin-note" id="tools-check-label"><strong>Ubuntu terminal · reopen, then verify</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="tools-check-label"><code class="language-bash">git --version
+uv --version</code></pre>
+      <p><strong>Check:</strong> both print versions without errors. If uv is not found, follow the installer’s PATH instructions or ask for help; do not use a second Windows installation to hide the problem.</p>
+    </section>
+
+    <section class="chapter" id="create-project" aria-labelledby="project-title">
+      <h2 id="project-title">One project. Its own Python.</h2>
+      <p>A <strong><a href="../reference/glossary.html#glossary-virtual-environment">virtual environment</a></strong> isolates a project’s Python packages from other environments. We use uv to manage it; <code>uv run</code> selects the project environment without manual activation. Read <a href="https://docs.python.org/3/tutorial/venv.html">Python’s explanation of isolation</a> and <a href="https://docs.astral.sh/uv/guides/projects/">uv’s project guide</a>.</p>
+      <p><strong>Our baseline is Python 3.12.</strong> At this lesson’s source check, it remains <a href="https://devguide.python.org/versions/">security-supported</a>, and falls within <a href="https://dlthub.com/docs/reference/installation">dlt’s documented Python range</a>. This is not a tested compatibility matrix for Dagster, dbt, adapters, or dashboards. Do not install the whole stack yet or replace Ubuntu’s system Python.</p>
+      <p>Use a <strong>new, empty directory</strong>. Run this block once. The first guard rejects a pre-existing <code>UV_PROJECT_ENVIRONMENT</code> override, which could direct installs outside the lab. If that guard fails, ask before changing your configuration. If the folder already exists, the <code>&amp;&amp;</code> chain also stops: choose a fresh name consistently rather than overwriting work.</p>
+      <p class="margin-note" id="project-create-label"><strong>Ubuntu terminal · create the new lab</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="project-create-label"><code class="language-bash">test -z "${UV_PROJECT_ENVIRONMENT:-}" &amp;&amp;
+mkdir "$HOME/factory-setup-lab" &amp;&amp;
+cd "$HOME/factory-setup-lab" &amp;&amp;
+uv init --bare --vcs none --python 3.12 &amp;&amp;
+uv python pin 3.12 &amp;&amp;
+uv add dlt</code></pre>
+      <p>uv can download the requested interpreter when needed. <code>uv add dlt</code> installs the core library and resolves its dependencies; <strong>it does not load factory data or install our database drivers</strong>. This introduces one relevant dependency so that the lockfile exercise is real. <a href="https://docs.astral.sh/uv/guides/install-python/">Managed Python</a> · <a href="https://docs.astral.sh/uv/guides/projects/#managing-dependencies">Managing dependencies</a>.</p>
+      <div class="table-scroll"><table><caption>Four different responsibilities</caption><thead><tr><th scope="col">Artifact</th><th scope="col">Meaning</th><th scope="col">Keep in Git?</th></tr></thead><tbody>
+        <tr><th scope="row"><code>pyproject.toml</code></th><td>Project requirements, including direct dependencies and a Python requirement.</td><td>Yes</td></tr>
+        <tr><th scope="row"><code>.python-version</code></th><td>The selected Python minor line: <code>3.12</code>. Record the actual patch version too.</td><td>Yes</td></tr>
+        <tr><th scope="row"><code>uv.lock</code></th><td>Resolved dependency versions and metadata, managed by uv—not by hand.</td><td>Yes</td></tr>
+        <tr><th scope="row"><code>.venv/</code></th><td>This machine’s installed project environment. Rebuild it from the records.</td><td>No</td></tr>
+      </tbody></table></div>
+      <p class="margin-note" id="runtime-check-label"><strong>Ubuntu terminal · inside ~/factory-setup-lab</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="runtime-check-label"><code class="language-bash">uv run --locked python --version
+uv run --locked python -c "from importlib.metadata import version; print(version('dlt'))"</code></pre>
+      <p><strong>Check:</strong> Python reports <code>3.12.x</code>, dlt prints a version, and <code>uv.lock</code> exists. Your exact resolved versions are observations to record—not numbers copied from this page. <code>--locked</code> refuses a missing or outdated lock rather than silently changing it.</p>
+      <div id="environment-check">
+        <h3>Prove which environment runs the code.</h3>
+        <p>Save the following as <code>check_environment.py</code> in the lab directory. Predict what “Isolated” will show. Python documents <a href="https://docs.python.org/3/library/venv.html#how-venvs-work">the prefix comparison</a> used here.</p>
+        <p class="margin-note" id="python-check-label"><strong>Python file · save inside the Ubuntu lab</strong> — do not paste this into PowerShell or a Bash prompt.</p>
+        <pre aria-labelledby="python-check-label"><code class="language-python">import sys
+from pathlib import Path
+
+assert sys.prefix != sys.base_prefix, "Use uv run --locked python check_environment.py"
+assert sys.platform == "linux", "Use Python inside Ubuntu / WSL for this lesson"
+
+print("Python:", sys.version.split()[0])
+print("Isolated:", sys.prefix != sys.base_prefix)
+print("Environment:", Path(sys.prefix).name)</code></pre>
+        <p class="margin-note" id="run-check-label"><strong>Ubuntu terminal · run the saved file</strong></p>
+        <pre data-terminal="ubuntu" aria-labelledby="run-check-label"><code class="language-bash">uv run --locked python check_environment.py</code></pre>
+        <p><strong>Expected:</strong> <code>Python: 3.12.x</code>, <code>Isolated: True</code>, <code>Environment: .venv</code>. The assertions check isolation and Linux; <em>you must also check the printed version and environment name</em>. An active environment alone does not prove it is the intended project’s environment.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="lock-replay" aria-labelledby="lock-title">
+      <h2 id="lock-title">Rebuild from the lock, not from memory.</h2>
+      <p><strong>Predict:</strong> will a second installation change <code>uv.lock</code>? Run inside the same lab. <a href="https://docs.astral.sh/uv/concepts/projects/sync/">uv sync --locked</a> synchronizes installed packages to the lock without updating it; it can remove extra packages from that environment. Use it only in this isolated lab—not against system Python.</p>
+      <p class="margin-note" id="sync-label"><strong>Ubuntu terminal · synchronize the existing lab</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="sync-label"><code class="language-bash">sha256sum uv.lock
+uv sync --locked
+uv run --locked python check_environment.py
+sha256sum uv.lock</code></pre>
+      <p><strong>Check:</strong> the two hashes match and isolation still passes. This verifies the lock was unchanged; it does not yet prove a fresh environment was reconstructed.</p>
+      <h3>Now try a genuinely separate environment.</h3>
+      <p>First confirm <code>.venv-replay</code> does not already exist. The following <a href="https://docs.astral.sh/uv/concepts/projects/config/#project-environment-path">documented environment-path override</a> applies only to each prefixed command. It creates a second environment without deleting the first. Never point it at a system or shared directory.</p>
+      <p class="margin-note" id="replay-label"><strong>Ubuntu terminal · recreate from the same lock</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="replay-label"><code class="language-bash">test ! -e .venv-replay &amp;&amp;
+UV_PROJECT_ENVIRONMENT=.venv-replay uv sync --locked &amp;&amp;
+UV_PROJECT_ENVIRONMENT=.venv-replay uv run --locked python check_environment.py</code></pre>
+      <p><strong>Expected:</strong> <code>Isolated: True</code> and <code>Environment: .venv-replay</code>. The original <code>.venv</code> remains intact. If the first guard fails, stop or choose a fresh replay name in every occurrence; do not remove existing directories. This is the same uv workflow, not a second package manager.</p>
+      <p><strong>Independent variation:</strong> run the dlt version command from the previous section with the same <code>UV_PROJECT_ENVIRONMENT=.venv-replay</code> prefix. Compare it with the original environment. Explain why the dependency versions agree even though the environment directories differ.</p>
+      <details class="handbook" id="lock-explanation"><summary>Check your explanation after trying</summary><div class="handbook-body"><p>Both environments install from the same <code>uv.lock</code> on the same platform/interpreter line. A lock records the resolved dependencies; the environment is their installation. Locking does not pin your Windows build, Docker image, interpreter patch, or external data, and does not prove every platform or future adapter combination works.</p></div></details>
+      <h3>Version the recipe, not the environment.</h3>
+      <p>Still inside this newly created lab, initialize a <strong>local</strong> Git repository. Append ignore rules; stage only the named files. No remote, account, commit identity, or push is required.</p>
+      <p class="margin-note" id="git-record-label"><strong>Ubuntu terminal · lab directory only</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="git-record-label"><code class="language-bash">git init
+printf '\n.venv/\n.venv-replay/\n.env\n.dlt/secrets.toml\n__pycache__/\n' &gt;&gt; .gitignore
+git add pyproject.toml uv.lock .python-version .gitignore check_environment.py
+git status --short</code></pre>
+      <p><strong>Check:</strong> the five named files are staged; neither virtual environment is. Do not use <code>git add .</code> as a substitute for checking. Keep passwords, tokens, and future connection secrets out of both Git and your exit report.</p>
+      <p class="margin-note"><strong>If --locked fails:</strong> stop and read the error. Compare your intended requirements with <code>pyproject.toml</code> and the lock. Deliberate dependency changes should be resolved and reviewed with uv; do not delete the lock or switch to <code>--frozen</code> merely to silence a mismatch.</p>
+    </section>
+
+    <section class="chapter" id="docker" aria-labelledby="docker-title">
+      <h2 id="docker-title">A Docker client is not a running engine.</h2>
+      <p><strong>Docker Desktop</strong> manages the local engine on Windows; the <strong>Docker CLI</strong> sends it commands. <strong>Compose</strong> describes and runs multi-container applications. Desktop already includes the <a href="https://docs.docker.com/compose/install/">Compose plugin</a>; do not install the legacy standalone <code>docker-compose</code> for this path.</p>
+      <ol>
+        <li>After passing the preflight, use the <a href="https://docs.docker.com/desktop/setup/install/windows-install/">official Windows installer</a> matching your architecture. Review the terms before accepting; do not purchase anything for this lesson.</li>
+        <li>Start <strong>Docker Desktop from Windows</strong>. Use its WSL 2 based engine and Linux containers.</li>
+        <li>Under Settings → Resources → WSL Integration, enable your Ubuntu distribution and apply the change. If the menu is missing, check Linux-container mode. Follow <a href="https://docs.docker.com/desktop/features/wsl/">Docker’s WSL instructions</a>; labels may change with Desktop versions.</li>
+        <li>Reopen Ubuntu and run the checks below. Do <strong>not</strong> also install Docker Engine with apt inside Ubuntu: Docker warns that the two installations can conflict.</li>
+      </ol>
+      <p class="margin-note" id="docker-check-label"><strong>Ubuntu terminal · Docker Desktop running on Windows</strong></p>
+      <pre data-terminal="ubuntu" aria-labelledby="docker-check-label"><code class="language-bash">docker --version
+docker version
+docker compose version
+docker run --rm hello-world</code></pre>
+      <div class="table-scroll"><table><caption>Four commands, four different pieces of evidence</caption><thead><tr><th scope="col">Observation</th><th scope="col">What it proves</th><th scope="col">What it does not prove</th></tr></thead><tbody>
+        <tr><th scope="row"><code>docker --version</code></th><td>The CLI is available.</td><td>The engine is reachable.</td></tr>
+        <tr><th scope="row"><code>docker version</code></th><td>Successful Client <em>and</em> Server sections show communication with an engine.</td><td>A database or our factory stack is ready.</td></tr>
+        <tr><th scope="row"><code>docker compose version</code></th><td>The Compose plugin is available.</td><td>A multi-service configuration has been tested.</td></tr>
+        <tr><th scope="row"><code>hello-world</code> succeeds</th><td>A small container ran and exited. Look for “Hello from Docker!” and a successful command exit.</td><td>Storage, database credentials, ports, and application images have been validated.</td></tr>
+      </tbody></table></div>
+      <p><code>--rm</code> removes the exited smoke-test container, <em>not</em> its cached image. The image may need a network download. Its default tag is a convenience for this disposable check, not our future application’s image-pinning policy. <a href="https://docs.docker.com/reference/cli/docker/container/run/#rm">Docker’s cleanup reference</a>.</p>
+      <details class="handbook" id="recovery"><summary>When a check fails: stop, locate, then repair</summary><div class="handbook-body"><ul>
+        <li><strong>Docker command not found in Ubuntu:</strong> confirm Desktop is installed, running, and integrated with this distribution. Reopen Ubuntu.</li>
+        <li><strong>CLI version works, Server connection fails:</strong> check Desktop’s engine status, WSL integration, and Linux-container mode. Do not solve it by installing a second engine, using sudo, opening an unauthenticated TCP daemon, or weakening socket permissions.</li>
+        <li><strong>Image pull fails:</strong> record the network/proxy/rate-limit error. It is not evidence that Python isolation failed. Do not disable TLS verification.</li>
+        <li><strong>uv chooses the wrong place:</strong> check the current directory and <code>.python-version</code>. Run via <code>uv run --locked</code> in this lab. Ask before changing a global interpreter or an existing environment override.</li>
+        <li><strong>Resources or permissions are insufficient:</strong> pause for a smaller or administrator-approved plan. No cloud signup, factory databases, volume deletion, or broad Docker cleanup is required here.</li>
+      </ul></div></details>
+    </section>
+
+    <section class="chapter" id="practice" aria-labelledby="practice-title">
+      <h2 id="practice-title">Close the commands. Retrieve the reasons.</h2>
+      <p>Explain each choice before checking. Tomorrow, recall the terminal boundary and the four project artifacts without notes. Next week, repeat the version checks and explain what each one proves.</p>
+      <noscript><p>Automatic feedback needs JavaScript. Attempt the questions, then open the answer key below.</p></noscript>
+      <form class="lesson-quiz" data-quiz data-correct="ubuntu" id="q-terminal">
+        <fieldset><legend>1. In this lesson, where do you run uv project commands?</legend>
+          <label><input type="radio" name="terminal" value="ubuntu" data-feedback="Git, uv, and project Python stay together in the Ubuntu development environment."> The Ubuntu terminal</label>
+          <label><input type="radio" name="terminal" value="powershell" data-feedback="PowerShell manages Windows/WSL setup here. A second native Windows toolchain would cross the boundary we chose."> The PowerShell terminal</label>
+          <label><input type="radio" name="terminal" value="python" data-feedback="uv is a shell command, not Python code to enter at the Python prompt."> The Python console</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="project" id="q-isolation">
+        <fieldset><legend>2. From the lab, uv run selects the intended .venv. What owns its installed packages?</legend>
+          <label><input type="radio" name="isolation" value="system" data-feedback="Our uv project environment is separate from system Python; do not install the lab packages globally."> The system interpreter</label>
+          <label><input type="radio" name="isolation" value="project" data-feedback="The project virtual environment contains its installed Python packages. The lockfile records how to recreate them."> The project environment</label>
+          <label><input type="radio" name="isolation" value="docker" data-feedback="This Python environment runs inside Ubuntu, not inside a container we created."> The Docker engine</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="sync" id="q-lock">
+        <fieldset><legend>3. The requirements and uv.lock agree. What is the purpose of uv sync --locked?</legend>
+          <label><input type="radio" name="lock" value="unchecked" data-feedback="The --locked option checks whether the lock matches project requirements and refuses to update it silently."> Reinstall without checking</label>
+          <label><input type="radio" name="lock" value="delete" data-feedback="Keep the lockfile. Deleting the record throws away the dependency resolution you want to reproduce."> Delete dependency records</label>
+          <label><input type="radio" name="lock" value="sync" data-feedback="It synchronizes the environment from the up-to-date lock. Exact sync can remove extra packages, so keep it project-scoped."> Synchronize locked dependencies</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="desktop" id="q-docker">
+        <fieldset><legend>4. The CLI prints a version, but cannot reach the Server. What is the next useful action?</legend>
+          <label><input type="radio" name="docker" value="reinstall" data-feedback="A working client does not justify reinstalling every tool. Locate the failed client-to-engine boundary first."> Reinstall every tool</label>
+          <label><input type="radio" name="docker" value="desktop" data-feedback="Start or inspect Docker Desktop, then confirm its engine and Ubuntu integration. A client version alone is insufficient."> Check Docker Desktop</label>
+          <label><input type="radio" name="docker" value="permissions" data-feedback="Do not weaken socket permissions or security controls. Check the supported Desktop integration instead."> Disable socket permissions</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <details class="handbook" id="answer-key"><summary>Answer key · open after attempting the questions</summary><div class="handbook-body"><ol><li><strong>The Ubuntu terminal.</strong> One development home avoids accidentally mixing Windows and Linux toolchains.</li><li><strong>The project environment.</strong> Packages are installed in .venv, not in the lockfile or Docker engine.</li><li><strong>Synchronize locked dependencies.</strong> An outdated lock is an error to investigate, not bypass.</li><li><strong>Check Docker Desktop.</strong> Confirm the engine and distribution integration before retesting.</li></ol></div></details>
+    </section>
+
+    <section class="chapter" id="exit-report" aria-labelledby="exit-title">
+      <h2 id="exit-title">Bring back evidence, not a “done” badge.</h2>
+      <p>Send the following observations to the teaching agent. Mark anything blocked as <strong>not verified</strong>; installation success is not the whole milestone. Share version numbers and relevant error messages, not passwords, account details, personal paths, or machine identifiers.</p>
+      <pre><code class="language-text">Windows edition/build + CPU architecture:
+Virtualization / installed RAM / Linux-visible RAM:
+Free space on Windows host drive / WSL filesystem:
+WSL version / Ubuntu release / distribution mode:
+Git version / uv version / Python patch / dlt version:
+Original .venv check / .venv-replay check / lock hash unchanged:
+Docker Client + Server / Compose version / hello-world result:
+Budget: deferred; no paid resources / Desktop eligibility checked:
+Blocked or not verified:
+Explain: why keep uv.lock but not .venv in Git?</code></pre>
+      <p>Ask follow-up questions whenever a check or terminal boundary is unclear. We update learning records from your explanation and observed results—not from this page being opened or authored.</p>
+      <p><a href="../reference/local-setup-checklist.html">Keep the printable setup checklist</a> · <a href="../reference/glossary.html">Course glossary</a> · <a href="0001-from-order-to-insight.html#finish">Retrieve the architecture from lesson 1</a>.</p>
+    </section>
+
+    <section class="chapter" id="reading" aria-labelledby="reading-title">
+      <h2 id="reading-title">Read the project model once.</h2>
+      <p><strong>Primary reading:</strong> <a href="https://docs.astral.sh/uv/guides/projects/#project-structure">Astral uv: project structure</a>. Read the roles of <code>pyproject.toml</code>, <code>uv.lock</code>, and <code>.venv</code>; then close it and explain the difference.</p>
+      <p class="margin-note">Installation links above are the authoritative step-by-step references. Sources checked 30 October 2026; recheck live Windows requirements, licensing, and Python/package support before installing. Authoring checks cover the HTML and standard-library script; the Windows installation and Python 3.12/dlt/container steps require your observed results. Core dlt is a locking example only; the combined factory stack is not yet integration-tested.</p>
+    </section>
+    <footer class="page-footer"><p><strong>Next:</strong> after the setup checks pass, run the <a href="../simulator/README.md">deterministic source fixture</a> and explain the three raw lines versus $45.00 in shipped sales. Starting MySQL and validating the full tool matrix come in a later lab.</p><p><a href="0001-from-order-to-insight.html">Previous lesson</a> · <a href="../index.html#curriculum">Course roadmap</a> · <a href="#main">Back to the top</a></p></footer>
+  </main>
+  <p id="copy-feedback" class="sr-only" role="status"></p>
+</body>
+</html>

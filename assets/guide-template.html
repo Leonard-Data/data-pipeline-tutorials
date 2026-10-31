@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A 20-week, project-based guide to warehouse and pipeline architecture using an ice cream factory, Python, dlt, ClickHouse, dbt, and Dagster.">
+  <title>Factory Data Lab — Your architecture field guide</title>
+  <link rel="stylesheet" href="assets/course.css">
+  <script src="assets/course.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the guide</a>
+  <header class="site-header">
+    <a class="wordmark" href="#main">Factory <span>Data Lab</span></a>
+    <div class="header-links"><a href="SYLLABUS.md">Markdown syllabus</a><button type="button" data-print hidden>Print guide</button></div>
+  </header>
+  <div class="page-layout">
+    <aside class="sidebar">
+      <nav aria-label="Guide contents">
+        <p>Guide contents</p>
+        <ul class="guide-groups">
+          <li><span class="guide-group-label">Guide</span><ul>
+            <li><a href="#architecture">The architecture</a></li>
+            <li><a href="#experiment">Try a pipeline rerun</a></li>
+            <li><a href="#curriculum">Your 20-week roadmap</a></li>
+            <li><a href="#code-examples">Code to learn from</a></li>
+            <li><a href="#field-notes">Definitions &amp; decisions</a></li>
+            <li><a href="#self-check">Check your understanding</a></li>
+            <li><a href="#sources">Primary sources</a></li>
+          </ul></li>
+          <li><span class="guide-group-label">Lessons</span><ul>
+            <li><a href="lessons/0001-from-order-to-insight.html">Lesson 1: trace an order</a></li>
+            <li><a href="lessons/0002-reproducible-local-setup.html">Lesson 2: local setup</a></li>
+          </ul></li>
+        </ul>
+      </nav>
+      <div class="sidebar-note"><strong>Learn the why.</strong><p>Build it. Verify it. Break and repair it. Then explain the trade-off.</p><a href="reference/glossary.html">Open the printable glossary</a></div>
+    </aside>
+    <aside class="page-contents">
+      <details class="contents-outline">
+        <summary>On this page</summary>
+        <nav aria-label="On this page"><ul>{{PAGE_CONTENTS}}</ul></nav>
+      </details>
+    </aside>
+    <main id="main">
+      <section class="introduction" aria-labelledby="guide-title">
+        <h1 id="guide-title">From factory orders<br>to trusted answers.</h1>
+        <p class="lede">Learn data warehouse and pipeline architecture by building one ice cream factory analytics platform, one reliable layer at a time.</p>
+        <ul class="course-meta" aria-label="Course expectations"><li>20 weeks</li><li>6–8 hours / week</li><li>Basic Python &amp; SQL</li><li>10 project milestones</li></ul>
+        <p class="intro-note">A job-readiness path, not a promise of mastery in 20 weeks. Move forward when you can pass the checks independently.</p>
+        <a class="primary-link" href="lessons/0001-from-order-to-insight.html">Open lesson 1 <span aria-hidden="true">→</span></a>
+      </section>
+
+      <section id="architecture" class="chapter" aria-labelledby="architecture-title">
+        <div class="section-heading"><h2 id="architecture-title">One system. Clear responsibilities.</h2><a href="reference/glossary.html#glossary-grain">What does “grain” mean?</a></div>
+        <p>Python generates synthetic transactions. Follow an order through the batch ELT system below. Open a stage to see what it owns—and what it does not.</p>
+        <figure class="architecture">
+          <p class="orchestration"><strong>Dagster orchestrates</strong> ingestion, transformations, checks, and scheduled recovery. It does not replace the engines below.</p>
+          <ol class="pipeline" aria-label="Data flow from source to analytical marts">
+            <li><details><summary><span class="stage-role">Source</span><strong>MySQL</strong><span class="stage-action">Record orders</span></summary><p>Transactional tables hold orders and lines. Python creates reproducible source fixtures. MySQL enforces the source keys.</p><a href="#m1">Build in M1</a></details></li>
+            <li><details><summary><span class="stage-role">Extract + load</span><strong>dlt</strong><span class="stage-action">Move source rows</span></summary><p>Connect to MySQL, extract selected tables, and load ClickHouse. Incremental state and write disposition need separate decisions.</p><a href="#m2">Build in M2</a></details></li>
+            <li><details><summary><span class="stage-role">Raw storage</span><strong>ClickHouse</strong><span class="stage-action">Preserve source data</span></summary><p>Keep source-oriented tables for reconciliation. A ClickHouse primary key does not enforce business-key uniqueness.</p><a href="#m2">Verify in M2</a></details></li>
+            <li><details><summary><span class="stage-role">Transform</span><strong>dbt</strong><span class="stage-action">Model &amp; test in SQL</span></summary><p>dbt runs SQL inside ClickHouse. Staging, facts, dimensions, and marts define business meaning and tested dependencies.</p><a href="#m3">Model in M3</a></details></li>
+            <li><details><summary><span class="stage-role">Analytical marts</span><strong>ClickHouse</strong><span class="stage-action">Publish useful answers</span></summary><p>Validated sales, production, waste, and inventory models stay in the warehouse. Raw and marts can share one instance.</p><a href="#m5">Extend in M5</a></details></li>
+          </ol>
+          <div class="consumers"><span>Read-only consumers of the same marts</span><div><strong>Streamlit</strong><p>The primary analytics dashboard.</p></div><div><strong>Reflex</strong><p>A small, stateful manager view.</p></div></div>
+          <figcaption>Data flows into the warehouse; both apps query it. Opening a dashboard must not launch an ingestion job. CI and monitoring surround the system.</figcaption>
+        </figure>
+      </section>
+
+      <section id="experiment" class="chapter" aria-labelledby="experiment-title">
+        <h2 id="experiment-title">What happens when you run it twice?</h2>
+        <p>A successful load can still produce a wrong answer. Try a second load of the <em>same</em> two order lines. This synthetic browser model illustrates full-batch replace versus naive append—not all dlt behavior.</p>
+        <div class="experiment-layout">
+          <div><h3>The source never changes</h3><div class="table-scroll"><table><caption>Synthetic shipped order 100 · USD</caption><thead><tr><th>Line</th><th>Quantity</th><th>Price</th><th>Discount</th><th>Net</th></tr></thead><tbody><tr><td>1</td><td>4</td><td>$5.00</td><td>$2.00</td><td>$18.00</td></tr><tr><td>2</td><td>3</td><td>$9.00</td><td>$0.00</td><td>$27.00</td></tr></tbody><tfoot><tr><th colspan="4">Expected answer</th><td>$45.00</td></tr></tfoot></table></div></div>
+          <div class="warehouse-result"><h3>The warehouse after loading</h3><dl><div><dt>Loaded rows</dt><dd><output id="warehouse-rows">2</output></dd></div><div><dt>Duplicated business keys</dt><dd><output id="duplicate-keys">0</output></dd></div><div><dt>Net shipped sales</dt><dd><output id="warehouse-total">$45.00</output></dd></div></dl></div>
+        </div>
+        <div id="rerun-controls" class="practice-controls" hidden>
+          <fieldset><legend>Choose a write behavior</legend><label><input type="radio" name="write-mode" value="replace" checked> Replace this small batch</label><label><input type="radio" name="write-mode" value="append"> Append every row</label></fieldset>
+          <div class="button-row"><button class="primary-button" type="button" id="run-batch">Run the same batch</button><button type="button" id="reset-batch">Reset the experiment</button></div>
+          <p id="rerun-feedback" class="feedback" role="status">Baseline: two lines, $45.00. Predict the result before running.</p>
+        </div>
+        <noscript><p>The interactive experiment needs JavaScript. Without it: replace keeps two rows and $45.00; blindly appending the same batch gives four rows and $90.00.</p></noscript>
+        <p class="margin-note">The lesson: <strong>idempotency</strong> means that replaying the same logical work preserves the intended business answer. Replace is useful for this tiny full snapshot, not a universal incremental strategy. <a href="https://dlthub.com/docs/general-usage/incremental-loading">Read dlt’s loading modes.</a></p>
+      </section>
+
+      <section id="curriculum" class="chapter" aria-labelledby="curriculum-title">
+        <div class="section-heading"><h2 id="curriculum-title">Your 20-week roadmap.</h2><a href="SYLLABUS.md">Original syllabus</a></div>
+        <p>Each milestone is two weeks. Open one for concepts, setup, coding-along tasks, independent practice, acceptance checks, and primary readings. No milestone is marked complete merely because you opened it.</p>
+        <div class="milestones">{{MILESTONES}}</div>
+        <p class="margin-note">Keep the rhythm: 30 minutes of recall, 1 hour of concepts, 90 minutes coding along, 2 hours of independent practice, and 1 hour explaining and troubleshooting. Add up to 2 optional hours.</p>
+      </section>
+
+      <section id="code-examples" class="chapter" aria-labelledby="examples-title">
+        <h2 id="examples-title">Read the code. Predict the result.</h2>
+        <p>Follow the same $45.00 fixture from Python to source SQL, dlt, dbt, orchestration, and the two applications. Examples state their prerequisites. Only the standard-library fixture and freshness check run as-is; this is not a provisioned stack.</p>
+        <p class="margin-note">Copy one file at a time into the indicated project location. Read the setup and caveats first. <a href="CODE-EXAMPLES.md">View the annotated Markdown examples.</a></p>
+        <p id="copy-feedback" class="sr-only" role="status"></p>
+        <div class="examples">{{EXAMPLES}}</div>
+      </section>
+
+      <section id="field-notes" class="chapter" aria-labelledby="notes-title">
+        <div class="section-heading"><h2 id="notes-title">Keep the fundamentals close.</h2><a href="reference/glossary.html">Print the glossary</a></div>
+        <p>The full project definitions, metric contracts, tool choices, study rhythm, and deployment boundaries remain part of the course—not just the code.</p>
+        {{HANDBOOK}}
+      </section>
+
+      <section id="self-check" class="chapter" aria-labelledby="check-title">
+        <h2 id="check-title">A small check before you move on.</h2>
+        <p>Recall without looking: in <code>fct_order_line</code>, what does one row represent?</p>
+        <form id="grain-quiz" hidden>
+          <fieldset><legend>Choose the model’s grain</legend><label><input type="radio" name="grain" value="daily"> One factory daily total</label><label><input type="radio" name="grain" value="line"> One sales order line</label><label><input type="radio" name="grain" value="product"> One product master record</label></fieldset>
+          <button class="primary-button" type="submit">Check my answer</button>
+          <p id="quiz-feedback" class="feedback" role="status">Choose from memory, then check your reasoning.</p>
+        </form>
+        <noscript><details><summary>Reveal the answer</summary><p>One sales order line. A daily total is an aggregate; a product master row is a dimension. Mixing these grains can multiply sales.</p></details></noscript>
+        <p>Revisit this tomorrow, next week, and three weeks from now. If anything is unclear, ask your teaching agent to explain it using a different factory example.</p>
+      </section>
+
+      <section id="sources" class="chapter" aria-labelledby="sources-title">
+        <h2 id="sources-title">Learn from the people who own the tools.</h2>
+        <p>Primary documentation grounds the course. APIs and hosting requirements can change; verify the version matrix during setup. All links require internet, but the guide itself works offline.</p>
+        {{RESOURCES}}
+      </section>
+      <footer class="page-footer"><p><strong>Your next step:</strong> <a href="lessons/0001-from-order-to-insight.html">Trace one order in lesson 1.</a> Explain the architecture before setting up your local source.</p><p>Portable study guide · <a href="MISSION.md">Learning mission</a> · <a href="RESOURCES.md">Resource notes</a> · <a href="#main">Back to the top</a></p></footer>
+    </main>
+  </div>
+</body>
+</html>

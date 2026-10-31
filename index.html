@@ -1,0 +1,1059 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A 20-week, project-based guide to warehouse and pipeline architecture using an ice cream factory, Python, dlt, ClickHouse, dbt, and Dagster.">
+  <title>Factory Data Lab — Your architecture field guide</title>
+  <link rel="stylesheet" href="assets/course.css">
+  <script src="assets/course.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the guide</a>
+  <header class="site-header">
+    <a class="wordmark" href="#main">Factory <span>Data Lab</span></a>
+    <div class="header-links"><a href="SYLLABUS.md">Markdown syllabus</a><button type="button" data-print hidden>Print guide</button></div>
+  </header>
+  <div class="page-layout">
+    <aside class="sidebar">
+      <nav aria-label="Guide contents">
+        <p>Guide contents</p>
+        <ul class="guide-groups">
+          <li><span class="guide-group-label">Guide</span><ul>
+            <li><a href="#architecture">The architecture</a></li>
+            <li><a href="#experiment">Try a pipeline rerun</a></li>
+            <li><a href="#curriculum">Your 20-week roadmap</a></li>
+            <li><a href="#code-examples">Code to learn from</a></li>
+            <li><a href="#field-notes">Definitions &amp; decisions</a></li>
+            <li><a href="#self-check">Check your understanding</a></li>
+            <li><a href="#sources">Primary sources</a></li>
+          </ul></li>
+          <li><span class="guide-group-label">Lessons</span><ul>
+            <li><a href="lessons/0001-from-order-to-insight.html">Lesson 1: trace an order</a></li>
+            <li><a href="lessons/0002-reproducible-local-setup.html">Lesson 2: local setup</a></li>
+          </ul></li>
+        </ul>
+      </nav>
+      <div class="sidebar-note"><strong>Learn the why.</strong><p>Build it. Verify it. Break and repair it. Then explain the trade-off.</p><a href="reference/glossary.html">Open the printable glossary</a></div>
+    </aside>
+    <aside class="page-contents">
+      <details class="contents-outline">
+        <summary>On this page</summary>
+        <nav aria-label="On this page"><ul><li><a href="#architecture">The architecture</a></li><li><a href="#experiment">Pipeline rerun</a></li><li><a href="#curriculum">20-week roadmap</a><ul><li><a href="#m1">M1 · Factory foundation</a></li><li><a href="#m2">M2 · First warehouse load</a></li><li><a href="#m3">M3 · Modeled warehouse</a></li><li><a href="#m4">M4 · Reliable changes</a></li><li><a href="#m5">M5 · Factory analytics</a></li><li><a href="#m6">M6 · Orchestrated system</a></li><li><a href="#m7">M7 · Usable analytics</a></li><li><a href="#m8">M8 · Release candidate</a></li><li><a href="#m9">M9 · Deployed portfolio</a></li><li><a href="#m10">M10 · Operated portfolio</a></li></ul></li><li><a href="#code-examples">Code examples</a><ul><li><a href="#fixture-example">Python</a></li><li><a href="#example-mysql">MySQL</a></li><li><a href="#example-dlt">dlt</a></li><li><a href="#example-clickhouse">ClickHouse</a></li><li><a href="#example-dbt">dbt</a></li><li><a href="#example-dagster">Dagster</a></li><li><a href="#example-shared-query">Shared query</a></li><li><a href="#example-streamlit">Streamlit</a></li><li><a href="#example-reflex">Reflex</a></li><li><a href="#example-monitoring">Monitoring</a></li></ul></li><li><a href="#field-notes">Definitions &amp; decisions</a><ul><li><a href="#notes-definitions">Fundamental definitions</a></li><li><a href="#notes-tools">What each tool does—and when not to use it</a></li><li><a href="#notes-project">The project, source grains, and metric contracts</a></li><li><a href="#notes-rhythm">Study rhythm, retention, and feedback</a></li><li><a href="#notes-operations">Monitoring targets, deployment boundaries, and final assessment</a></li></ul></li><li><a href="#self-check">Check your understanding</a></li><li><a href="#sources">Primary sources</a></li></ul></nav>
+      </details>
+    </aside>
+    <main id="main">
+      <section class="introduction" aria-labelledby="guide-title">
+        <h1 id="guide-title">From factory orders<br>to trusted answers.</h1>
+        <p class="lede">Learn data warehouse and pipeline architecture by building one ice cream factory analytics platform, one reliable layer at a time.</p>
+        <ul class="course-meta" aria-label="Course expectations"><li>20 weeks</li><li>6–8 hours / week</li><li>Basic Python &amp; SQL</li><li>10 project milestones</li></ul>
+        <p class="intro-note">A job-readiness path, not a promise of mastery in 20 weeks. Move forward when you can pass the checks independently.</p>
+        <a class="primary-link" href="lessons/0001-from-order-to-insight.html">Open lesson 1 <span aria-hidden="true">→</span></a>
+      </section>
+
+      <section id="architecture" class="chapter" aria-labelledby="architecture-title">
+        <div class="section-heading"><h2 id="architecture-title">One system. Clear responsibilities.</h2><a href="reference/glossary.html#glossary-grain">What does “grain” mean?</a></div>
+        <p>Python generates synthetic transactions. Follow an order through the batch ELT system below. Open a stage to see what it owns—and what it does not.</p>
+        <figure class="architecture">
+          <p class="orchestration"><strong>Dagster orchestrates</strong> ingestion, transformations, checks, and scheduled recovery. It does not replace the engines below.</p>
+          <ol class="pipeline" aria-label="Data flow from source to analytical marts">
+            <li><details><summary><span class="stage-role">Source</span><strong>MySQL</strong><span class="stage-action">Record orders</span></summary><p>Transactional tables hold orders and lines. Python creates reproducible source fixtures. MySQL enforces the source keys.</p><a href="#m1">Build in M1</a></details></li>
+            <li><details><summary><span class="stage-role">Extract + load</span><strong>dlt</strong><span class="stage-action">Move source rows</span></summary><p>Connect to MySQL, extract selected tables, and load ClickHouse. Incremental state and write disposition need separate decisions.</p><a href="#m2">Build in M2</a></details></li>
+            <li><details><summary><span class="stage-role">Raw storage</span><strong>ClickHouse</strong><span class="stage-action">Preserve source data</span></summary><p>Keep source-oriented tables for reconciliation. A ClickHouse primary key does not enforce business-key uniqueness.</p><a href="#m2">Verify in M2</a></details></li>
+            <li><details><summary><span class="stage-role">Transform</span><strong>dbt</strong><span class="stage-action">Model &amp; test in SQL</span></summary><p>dbt runs SQL inside ClickHouse. Staging, facts, dimensions, and marts define business meaning and tested dependencies.</p><a href="#m3">Model in M3</a></details></li>
+            <li><details><summary><span class="stage-role">Analytical marts</span><strong>ClickHouse</strong><span class="stage-action">Publish useful answers</span></summary><p>Validated sales, production, waste, and inventory models stay in the warehouse. Raw and marts can share one instance.</p><a href="#m5">Extend in M5</a></details></li>
+          </ol>
+          <div class="consumers"><span>Read-only consumers of the same marts</span><div><strong>Streamlit</strong><p>The primary analytics dashboard.</p></div><div><strong>Reflex</strong><p>A small, stateful manager view.</p></div></div>
+          <figcaption>Data flows into the warehouse; both apps query it. Opening a dashboard must not launch an ingestion job. CI and monitoring surround the system.</figcaption>
+        </figure>
+      </section>
+
+      <section id="experiment" class="chapter" aria-labelledby="experiment-title">
+        <h2 id="experiment-title">What happens when you run it twice?</h2>
+        <p>A successful load can still produce a wrong answer. Try a second load of the <em>same</em> two order lines. This synthetic browser model illustrates full-batch replace versus naive append—not all dlt behavior.</p>
+        <div class="experiment-layout">
+          <div><h3>The source never changes</h3><div class="table-scroll"><table><caption>Synthetic shipped order 100 · USD</caption><thead><tr><th>Line</th><th>Quantity</th><th>Price</th><th>Discount</th><th>Net</th></tr></thead><tbody><tr><td>1</td><td>4</td><td>$5.00</td><td>$2.00</td><td>$18.00</td></tr><tr><td>2</td><td>3</td><td>$9.00</td><td>$0.00</td><td>$27.00</td></tr></tbody><tfoot><tr><th colspan="4">Expected answer</th><td>$45.00</td></tr></tfoot></table></div></div>
+          <div class="warehouse-result"><h3>The warehouse after loading</h3><dl><div><dt>Loaded rows</dt><dd><output id="warehouse-rows">2</output></dd></div><div><dt>Duplicated business keys</dt><dd><output id="duplicate-keys">0</output></dd></div><div><dt>Net shipped sales</dt><dd><output id="warehouse-total">$45.00</output></dd></div></dl></div>
+        </div>
+        <div id="rerun-controls" class="practice-controls" hidden>
+          <fieldset><legend>Choose a write behavior</legend><label><input type="radio" name="write-mode" value="replace" checked> Replace this small batch</label><label><input type="radio" name="write-mode" value="append"> Append every row</label></fieldset>
+          <div class="button-row"><button class="primary-button" type="button" id="run-batch">Run the same batch</button><button type="button" id="reset-batch">Reset the experiment</button></div>
+          <p id="rerun-feedback" class="feedback" role="status">Baseline: two lines, $45.00. Predict the result before running.</p>
+        </div>
+        <noscript><p>The interactive experiment needs JavaScript. Without it: replace keeps two rows and $45.00; blindly appending the same batch gives four rows and $90.00.</p></noscript>
+        <p class="margin-note">The lesson: <strong>idempotency</strong> means that replaying the same logical work preserves the intended business answer. Replace is useful for this tiny full snapshot, not a universal incremental strategy. <a href="https://dlthub.com/docs/general-usage/incremental-loading">Read dlt’s loading modes.</a></p>
+      </section>
+
+      <section id="curriculum" class="chapter" aria-labelledby="curriculum-title">
+        <div class="section-heading"><h2 id="curriculum-title">Your 20-week roadmap.</h2><a href="SYLLABUS.md">Original syllabus</a></div>
+        <p>Each milestone is two weeks. Open one for concepts, setup, coding-along tasks, independent practice, acceptance checks, and primary readings. No milestone is marked complete merely because you opened it.</p>
+        <div class="milestones"><details class="milestone" id="m1"><summary><span class="milestone-number">M1</span><span class="milestone-weeks">Weeks 1–2</span><span class="milestone-title">Factory foundation</span></summary><div class="milestone-body"><p><strong>Week 1 — Requirements, definitions, setup</strong></p>
+<ul>
+<li>Learn: OLTP/OLAP, pipeline/warehouse/mart, batch/streaming, ETL/ELT, source versus destination.</li>
+<li>Setup: confirm OS, Docker availability, hardware, and budget; install Git, a supported Python, an isolated environment, and Docker Compose as needed. <a href="lessons/0002-reproducible-local-setup.html">Lesson 2: reproducible local setup</a> teaches the selected Windows / WSL 2 + Ubuntu + Docker Desktop + uv workflow, with a Python 3.12 baseline and a <a href="reference/local-setup-checklist.html">printable checklist</a>.</li>
+<li>Diagnostic: write a small Python function, join two tables, aggregate by date, and explain how a one-to-many join changes row counts. Add only the refreshers the results justify.</li>
+<li>Code along: start MySQL, seed a tiny product/order dataset, and query a known total. Establish a tested version matrix for Python, dlt, dbt/adapter, Dagster/integrations, and clients; defer loading all services at once.</li>
+<li>When: start with business questions and latency requirements before choosing infrastructure.</li>
+</ul>
+<p><strong>Week 2 — Source contracts and trustworthy fixtures</strong></p>
+<ul>
+<li>Learn: keys, constraints, transactions, joins, nulls, decimals, UTC versus business dates, units, and source change timestamps.</li>
+<li>Code along: add a seeded Python factory-data CLI, schema migration, <code>updated_at</code>, and source reconciliation SQL. Add production/inventory fixtures as their modules arrive.</li>
+<li>Independent task: add one order with multiple lines and prove a header/line join does not duplicate sales totals. Draw the source-to-dashboard architecture without notes.</li>
+</ul>
+<p><strong>Pass M1:</strong> a clean local environment can start the source and reproduce a hand-checked fixture total; secrets are ignored by Git; simulator output is repeatable; five metric contracts have explicit units/grains; version compatibility has a recorded smoke-test result, not just unconstrained package installs.</p>
+<p><strong>Primary reading:</strong> <a href="https://docs.python.org/3/tutorial/venv.html">Python environments</a>, <a href="https://dev.mysql.com/doc/refman/8.4/en/tutorial.html">MySQL tutorial</a>, <a href="https://docs.docker.com/compose/gettingstarted/">Compose quickstart</a>, <a href="https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/">Kimball modeling process</a>.</p>
+</div></details><details class="milestone" id="m2"><summary><span class="milestone-number">M2</span><span class="milestone-weeks">Weeks 3–4</span><span class="milestone-title">First warehouse load</span></summary><div class="milestone-body"><p><strong>Week 3 — ClickHouse and the first dlt pipeline</strong></p>
+<ul>
+<li>Learn: column-oriented analytical storage, MergeTree basics, extract/load stages, schema mapping, load metadata, and full-load write modes.</li>
+<li>Setup: ClickHouse with durable storage and scoped users; configure dlt SQL-source dependencies, the MySQL driver, and ClickHouse destination. Keep credentials outside code.</li>
+<li>Code along: load <code>products</code>, <code>orders</code>, and <code>order_lines</code> into raw/source tables; inspect types, timestamps, decimals, row counts, and load output.</li>
+<li>When: full loads are easiest to reason about for small datasets and the first correctness baseline.</li>
+</ul>
+<p><strong>Week 4 — Reconciliation and safe reruns</strong></p>
+<ul>
+<li>Learn: extraction/write-mode separation, idempotency, partial failure, and the difference between load success and data correctness.</li>
+<li>Code along: build source-versus-raw checks for counts, key coverage, and shipped sales on the fixture; rerun the same full-load pipeline. Use a deliberate replace scope rather than blindly appending a complete extract.</li>
+<li>Independent task: insert a null or unexpected status, observe the failure, and fix the validation boundary. Do not accidentally truncate an unrelated table during a retry.</li>
+</ul>
+<p><strong>Pass M2:</strong> source and warehouse agree on the fixture; repeated runs do not double business totals; a failed connection yields an actionable error and a safe rerun; logical keys remain unique under the selected strategy.</p>
+<p><strong>Primary reading:</strong> <a href="https://dlthub.com/docs/dlt-ecosystem/destinations/clickhouse">dlt ClickHouse destination</a>, <a href="https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database/advanced">SQL source configuration</a>, <a href="https://dlthub.com/docs/general-usage/incremental-loading">load modes</a>, <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">MergeTree</a>.</p>
+</div></details><details class="milestone" id="m3"><summary><span class="milestone-number">M3</span><span class="milestone-weeks">Weeks 5–6</span><span class="milestone-title">Modeled warehouse</span></summary><div class="milestone-body"><p><strong>Week 5 — Grain, facts, dimensions, dbt</strong></p>
+<ul>
+<li>Learn: star schema, natural/surrogate keys, conformed dimensions, additive measures, and transaction versus snapshot facts.</li>
+<li>Setup: compatible <code>dbt-clickhouse</code>, an isolated development target, sources, profile, and <code>dbt debug</code>.</li>
+<li>Code along: build staging models, <code>dim_product</code>, <code>dim_factory</code> where applicable, <code>dim_date</code>, and <code>fct_order_line</code>. Explicitly document that one fact row is one source order line.</li>
+<li>When: use dbt when transformations must be named, tested, documented, and built in dependency order.</li>
+</ul>
+<p><strong>Week 6 — Marts, tests, and historical context</strong></p>
+<ul>
+<li>Code along: create <code>mart_daily_sales</code>, uniqueness/not-null/relationship/status tests, and a business-total reconciliation test. Use <code>dbt build</code> and generate documentation.</li>
+<li>Learn: type 1 versus type 2 history. Implement one tiny product-category history exercise with validity intervals and an as-of lookup; discuss when current-value reporting is enough. Keep transaction price on the fact rather than reusing today's product price.</li>
+<li>Independent task: introduce a duplicate dimension key and demonstrate why a join multiplies sales; then make the test catch it.</li>
+</ul>
+<p><strong>Pass M3:</strong> declared grain matches tested keys; dbt builds from raw data in a fresh development target; daily sales match the known fixture; historical category lookup returns one version, not multiple matches. Explain why inventory needs another fact grain.</p>
+<p><strong>Primary reading:</strong> <a href="https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/">dimensional modeling</a>, <a href="https://www.kimballgroup.com/2008/11/fact-tables/">fact-table grains</a>, <a href="https://clickhouse.com/docs/integrations/dbt">ClickHouse/dbt adapter</a>, <a href="https://docs.getdbt.com/docs/build/data-tests">dbt data tests</a>.</p>
+</div></details><details class="milestone" id="m4"><summary><span class="milestone-number">M4</span><span class="milestone-weeks">Weeks 7–8</span><span class="milestone-title">Reliable changes</span></summary><div class="milestone-body"><p><strong>Week 7 — Incremental ingestion and destination behavior</strong></p>
+<ul>
+<li>Learn: <code>updated_at</code> cursor, saved state, overlap/lookback, key-based deduplication, update ordering, and soft versus hard deletes.</li>
+<li>Code along: move suitable tables from full extraction to incremental polling; choose and test a supported dlt/ClickHouse write strategy. Keep small reference tables full-loaded if that remains simpler.</li>
+<li>Update an old order, add a new one, repeat a boundary timestamp, and mark a row deleted. Make mart filtering of deletion markers explicit.</li>
+<li>When: incremental loading is justified when a full load costs too much time or source load; it is not automatically safer.</li>
+</ul>
+<p><strong>Week 8 — Late events and isolated backfills</strong></p>
+<ul>
+<li>Code along: load a stock or waste event whose event date is yesterday but whose update timestamp is current. Recompute the affected business period. Run a bounded historical extraction without advancing or corrupting the regular cursor.</li>
+<li>Introduce an additive schema change; fail visibly on an incompatible type change instead of silently coercing important values.</li>
+<li>Compare dbt incremental materializations with small full rebuilds. Implement incremental transformation for one growing model only after its correctness can be compared with a full rebuild.</li>
+</ul>
+<p><strong>Pass M4:</strong> new, updated, repeated, soft-deleted, same-timestamp, and late records yield the expected current answer after reruns; the backfilled slice matches a full-rebuild baseline; ordinary incremental progress still works afterward.</p>
+<p><strong>Important boundary:</strong> timestamp polling does not discover physically deleted rows or changes with an unmodified/missed cursor. Document the remaining risk and alternatives: tombstones, periodic reconciliation/full refresh, or log-based CDC. Do not claim exactly-once delivery because one duplicate test passed.</p>
+<p><strong>Primary reading:</strong> <a href="https://dlthub.com/docs/general-usage/incremental-loading">dlt incremental loading</a>, <a href="https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database/advanced">bounded SQL loads</a>, <a href="https://dlthub.com/docs/dlt-ecosystem/destinations/clickhouse">destination engines and write behavior</a>, <a href="https://clickhouse.com/docs/integrations/dbt">dbt/ClickHouse materializations</a>.</p>
+</div></details><details class="milestone" id="m5"><summary><span class="milestone-number">M5</span><span class="milestone-weeks">Weeks 9–10</span><span class="milestone-title">Factory analytics</span></summary><div class="milestone-body"><p><strong>Week 9 — Production, waste, and inventory facts</strong></p>
+<ul>
+<li>Learn: process-specific grains, weighted ratios, periodic snapshots, opening balances, business-day boundaries, and late corrections.</li>
+<li>Code along: add <code>fct_production_batch</code>, <code>fct_waste_event</code>, <code>fct_inventory_movement</code>, and <code>fct_daily_inventory</code> at product/factory/day grain. Reuse conformed dimensions.</li>
+<li>When: event facts answer “what happened”; inventory snapshots answer “what was the state at day end.”</li>
+</ul>
+<p><strong>Week 10 — Business marts and quality gates</strong></p>
+<ul>
+<li>Build <code>mart_daily_production</code>, <code>mart_daily_waste</code>, and <code>mart_daily_inventory</code> alongside sales. Aggregate facts separately before cross-process comparisons.</li>
+<li>Add tests for units, invalid negative production, accepted output greater than actual output, missing dimensions, duplicate snapshots, zero denominators, and stock reconciliation. Negative stock is an explicit business rule decision, not automatically impossible.</li>
+<li>Independent task: seed a second factory, an inactive product/day, and an overnight movement. Explain which zero-activity rows the inventory report needs and how late data changes them.</li>
+</ul>
+<p><strong>Pass M5:</strong> all five business questions have documented SQL answers; weighted yield and waste rates match hand calculations; closing inventory reconciles to opening stock plus movements; no summing stock across dates or mixing kg with packs.</p>
+<p><strong>Primary reading:</strong> <a href="https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/">Kimball techniques</a>, <a href="https://www.kimballgroup.com/2008/11/fact-tables/">transaction/snapshot grains</a>, <a href="https://docs.getdbt.com/docs/build/data-tests">dbt tests</a>.</p>
+</div></details><details class="milestone" id="m6"><summary><span class="milestone-number">M6</span><span class="milestone-weeks">Weeks 11–12</span><span class="milestone-title">Orchestrated system</span></summary><div class="milestone-body"><p><strong>Week 11 — Dagster assets and lineage</strong></p>
+<ul>
+<li>Learn: asset versus task, dependency versus schedule, materialization metadata, retries, and lineage.</li>
+<li>Setup: Dagster, matching dlt/dbt integrations, local development UI, and explicit mappings from raw assets to dbt sources.</li>
+<li>Code along: expose ingestion and dbt builds as a connected asset graph; attach load counts, row counts, and check results. Keep extraction in dlt and business SQL in dbt.</li>
+<li>When: orchestration adds value when dependent work needs consistent execution and operational visibility, not because every script requires a scheduler.</li>
+</ul>
+<p><strong>Week 12 — Scheduling, partitions, and recovery</strong></p>
+<ul>
+<li>Add an hourly schedule, bounded retry/backoff, concurrency limits around shared ingestion state, and observable failure handling.</li>
+<li>Partition a suitable derived daily mart; practice targeted recomputation without creating overlapping writers. Do not force one mutable shared dlt cursor into concurrent date backfills.</li>
+<li>Stop MySQL during ingestion; break a dbt test; simulate an unavailable destination. Recover deliberately and confirm the resulting business data.</li>
+</ul>
+<p><strong>Pass M6:</strong> lineage runs source → raw → mart; failed required checks prevent the downstream release/promotion step; scheduled runs work while the daemon is running; retries are bounded; recovery produces correct totals without duplicate facts.</p>
+<p><strong>Primary reading:</strong> <a href="https://docs.dagster.io/integrations/libraries/dlt">Dagster/dlt</a>, <a href="https://docs.dagster.io/integrations/libraries/dbt">Dagster/dbt</a>, <a href="https://docs.dagster.io/deployment/oss/oss-instance-configuration">instance configuration</a>.</p>
+</div></details><details class="milestone" id="m7"><summary><span class="milestone-number">M7</span><span class="milestone-weeks">Weeks 13–14</span><span class="milestone-title">Usable analytics</span></summary><div class="milestone-body"><p><strong>Week 13 — Streamlit analytics dashboard</strong></p>
+<ul>
+<li>Learn: analytical UX, safe parameter binding, read-only credentials, caching, stale-data labeling, and empty/error states.</li>
+<li>Setup: Streamlit and a ClickHouse client/connection pattern supported by the locked dependencies.</li>
+<li>Code along: add date/factory/product filters, sales trend, output/yield/waste views, inventory view, and “data validated at” metadata. Use marts rather than untested raw tables.</li>
+<li>When: Streamlit is the shortest path to a usable internal Python analytics dashboard.</li>
+</ul>
+<p><strong>Week 14 — Small Reflex manager view</strong></p>
+<ul>
+<li>Learn: UI state, server-side events/data access, loading/error handling, and how app deployment differs from pipeline execution.</li>
+<li>Setup: a small Reflex project; use its own environment if needed instead of forcing conflicting packages together.</li>
+<li>Code along: build one read-only production/waste explorer using the same mart definitions and filters as Streamlit. Do not duplicate the entire dashboard.</li>
+<li>Independent task: compare the two apps for the same scope; stop ClickHouse and verify helpful error states without leaking credentials or SQL internals.</li>
+</ul>
+<p><strong>Pass M7:</strong> both consumers agree with the SQL baseline; filters work; warehouse secrets never reach browser code; read-only users cannot write; cached results display honest freshness; charts/tables have clear units and usable labels. Confirm semantic equality, not pixel similarity.</p>
+<p><strong>Primary reading:</strong> <a href="https://docs.streamlit.io/develop/concepts/connections/connecting-to-data">Streamlit connections</a>, <a href="https://reflex.dev/docs/hosting/self-hosting/">Reflex deployment model</a>. Revisit the locked version's app APIs when writing each lesson.</p>
+</div></details><details class="milestone" id="m8"><summary><span class="milestone-number">M8</span><span class="milestone-weeks">Weeks 15–16</span><span class="milestone-title">Release candidate</span></summary><div class="milestone-body"><p><strong>Week 15 — Measure ClickHouse instead of guessing</strong></p>
+<ul>
+<li>Learn: sorting versus partitioning, sparse indexes, parts/merges, query plans, and resource trade-offs. Start without partitioning if the workload does not benefit from it.</li>
+<li>Code along: expand synthetic data to fit the machine, record a baseline query, inspect the plan and <code>system.query_log</code>, and test one sorting/model change.</li>
+<li>Compare rows/bytes read and query latency under recorded cache/concurrency conditions. Avoid universal millisecond promises based on a tiny warm-cache demo.</li>
+<li>When: optimize a measured bottleneck; materialized views and complex engines are optional comparison topics, not default requirements.</li>
+</ul>
+<p><strong>Week 16 — Tests, CI, and release artifacts</strong></p>
+<ul>
+<li>Learn: unit versus integration versus end-to-end tests, isolated test databases, schema changes, locks, and rollback.</li>
+<li>Code along: CI runs Python checks, a tiny real MySQL→dlt→ClickHouse integration test, dbt build/tests, and an application query smoke test. Use synthetic credentials and scoped cleanup.</li>
+<li>Package deployable images, record compatible versions/image tags, and document one release command sequence plus a safe rollback/migration policy.</li>
+</ul>
+<p><strong>Pass M8:</strong> a clean checkout passes the small end-to-end test; an intentional SQL/test defect makes CI fail; a measured optimization preserves all business answers; secrets and production databases are not used by CI.</p>
+<p><strong>Primary reading:</strong> <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">MergeTree</a>, <a href="https://clickhouse.com/docs/operations/system-tables/query_log">query log</a>, <a href="https://docs.getdbt.com/docs/build/data-tests">dbt tests</a>, <a href="https://docs.docker.com/compose/gettingstarted/">Compose</a>. Consult the selected CI provider's official documentation when the provider is chosen.</p>
+</div></details><details class="milestone" id="m9"><summary><span class="milestone-number">M9</span><span class="milestone-weeks">Weeks 17–18</span><span class="milestone-title">Deployed portfolio</span></summary><div class="milestone-body"><p><strong>Week 17 — Production-shaped single-host deployment</strong></p>
+<ul>
+<li>Learn: development versus deployment, network boundaries, TLS/authentication, health checks, persistent storage, scheduler uptime, and resource limits.</li>
+<li>Confirm a hosting budget and choose a VM or equivalent single-host environment. Run only the services the host can support; managed alternatives require a separate cost/security decision.</li>
+<li>Code along: deploy MySQL, ClickHouse, Dagster webserver/daemon/user code, and the two small apps. Choose a simple run-launching approach supported by the locked release rather than adding unnecessary dynamic container infrastructure.</li>
+<li>Persist Dagster metadata in a separate MySQL database/user through <code>dagster-mysql</code>; persist dlt state/working data and database volumes. MySQL source and metadata may share a server for this exercise, but that shares a failure domain.</li>
+</ul>
+<p><strong>Week 18 — Access, release, backup, and restore</strong></p>
+<ul>
+<li>Keep databases private; protect Dagster and apps behind authenticated access and TLS or a private authenticated tunnel. Configure WebSocket proxying where required by the app versions.</li>
+<li>Store secrets outside images/Git; separate source, loader, transformer, dashboard, and metadata privileges. Test denied operations.</li>
+<li>Back up needed databases, orchestration metadata, configuration, and dlt recovery state. Restore to an isolated target and reconcile a known business day.</li>
+<li>Define a mart publication approach: failed validation must not advertise partial results as a fresh release. For the small course dataset, prefer rebuilding candidate marts, validating them, and explicitly promoting them over inventing a distributed transaction.</li>
+</ul>
+<p><strong>Pass M9:</strong> a host/service restart preserves data and execution history; an actual scheduled refresh runs; only intended entry points are reachable; authorized app access works; restored data matches expected counts/totals; last-validated data remains clearly identified when a candidate build fails.</p>
+<p><strong>Deployment boundary:</strong> this is a portfolio-grade single-host system, not high availability. Protect the administrative UI; backups on the same disk do not protect against losing that disk. MySQL metadata storage and the complete topology still need hands-on compatibility verification.</p>
+<p><strong>Primary reading:</strong> <a href="https://docs.dagster.io/deployment/oss/deployment-options/docker">Dagster Compose topology</a>, <a href="https://docs.dagster.io/deployment/oss/oss-instance-configuration">MySQL instance storage</a>, <a href="https://reflex.dev/docs/hosting/self-hosting/">Reflex self-hosting</a>, <a href="https://docs.streamlit.io/develop/concepts/connections/connecting-to-data">Streamlit connection/secrets guidance</a>. Add current hosting, database-backup, and authentication primary sources before implementing this milestone.</p>
+</div></details><details class="milestone" id="m10"><summary><span class="milestone-number">M10</span><span class="milestone-weeks">Weeks 19–20</span><span class="milestone-title">Operated portfolio</span></summary><div class="milestone-body"><p><strong>Week 19 — Observe data and services</strong></p>
+<ul>
+<li>Learn: logs versus metrics versus checks, SLI/SLO, alert routing, runbooks, and why “the last job succeeded” is not enough.</li>
+<li>Instrument load progress, row counts, duration, retries/failures, source-to-mart reconciliation, freshness, volume anomalies, ClickHouse query cost, free disk, daemon health, and app availability.</li>
+<li>Add an alert destination you can actually receive. Use an independent host/service check so a dead Dagster daemon is not responsible for reporting its own death.</li>
+<li>Distinguish event-time lag from last successful validation. A quiet factory can have old events without a broken pipeline; use a source heartbeat or expected arrival schedule to interpret freshness.</li>
+</ul>
+<p><strong>Week 20 — Failure drills and portfolio handover</strong></p>
+<ul>
+<li>Drill a stopped source, a missed schedule, a schema change, a duplicate update, a late event, and a controlled backup restore. Exercise low-disk handling in an isolated test or with safe thresholds, never by filling an important host disk.</li>
+<li>Track detection and recovery times. Reconcile the repaired day and document what data was lost, if any.</li>
+<li>Deliver a README, architecture diagram, model grains/metric dictionary, setup instructions, version matrix, CI evidence, deployment instructions, runbook, and a short narrated demo.</li>
+<li>Explain when MySQL alone would suffice, when CDC/streaming would be justified, when ClickHouse is a poor fit, and when you would remove Reflex or Dagster to simplify a smaller system.</li>
+</ul>
+<p><strong>Pass M10:</strong> a deliberately broken pipeline or freshness condition sends a received alert; a daemon outage is detected independently; another person can follow the runbook; a restored/replayed slice matches the baseline; you can explain the architecture without reading tool documentation.</p>
+<p><strong>Primary reading:</strong> <a href="https://docs.dagster.io/deployment/oss/oss-instance-configuration">Dagster instance/run monitoring</a>, <a href="https://clickhouse.com/docs/operations/system-tables/query_log">ClickHouse query log</a>, <a href="https://dlthub.com/docs/general-usage/incremental-loading">dlt state/load behavior</a>, and the selected deployment provider's official operations guides.</p>
+</div></details></div>
+        <p class="margin-note">Keep the rhythm: 30 minutes of recall, 1 hour of concepts, 90 minutes coding along, 2 hours of independent practice, and 1 hour explaining and troubleshooting. Add up to 2 optional hours.</p>
+      </section>
+
+      <section id="code-examples" class="chapter" aria-labelledby="examples-title">
+        <h2 id="examples-title">Read the code. Predict the result.</h2>
+        <p>Follow the same $45.00 fixture from Python to source SQL, dlt, dbt, orchestration, and the two applications. Examples state their prerequisites. Only the standard-library fixture and freshness check run as-is; this is not a provisioned stack.</p>
+        <p class="margin-note">Copy one file at a time into the indicated project location. Read the setup and caveats first. <a href="CODE-EXAMPLES.md">View the annotated Markdown examples.</a></p>
+        <p id="copy-feedback" class="sr-only" role="status"></p>
+        <div class="examples"><details class="example" id="fixture-example" open><summary>Python · Establish an answer before a pipeline</summary><div class="example-body"><p><strong>Milestone M1. File: <code>fixture.py</code>. Runnable as-is with Python.</strong> One row means one order line. The discount is a total for that line, not a per-item discount. Money uses <code>Decimal</code>, not binary floating point.</p>
+<pre><code class="language-python">from decimal import Decimal
+
+lines = [
+    {&quot;line_id&quot;: 1, &quot;quantity&quot;: 4, &quot;unit_price&quot;: Decimal(&quot;5.00&quot;), &quot;discount&quot;: Decimal(&quot;2.00&quot;)},
+    {&quot;line_id&quot;: 2, &quot;quantity&quot;: 3, &quot;unit_price&quot;: Decimal(&quot;9.00&quot;), &quot;discount&quot;: Decimal(&quot;0.00&quot;)},
+]
+total = sum(
+    (line[&quot;quantity&quot;] * line[&quot;unit_price&quot;] - line[&quot;discount&quot;] for line in lines),
+    Decimal(&quot;0.00&quot;),
+)
+assert total == Decimal(&quot;45.00&quot;)
+print(f&quot;Expected net shipped sales: ${total:.2f}&quot;)
+</code></pre>
+<p><strong>Try it:</strong> change the second quantity from 3 to 4. Predict the total before running it. The new total should be $54.00. All values here and in the browser experiment are synthetic USD examples; returns and taxes are excluded.</p>
+</div></details><details class="example" id="example-mysql"><summary>MySQL · Declare the source grain</summary><div class="example-body"><p><strong>Milestone M1. File: <code>seed.sql</code>. Requires a new, empty tutorial database and a user allowed to create its tables.</strong> This is a deliberately tiny source, not the full factory schema. IDs are explicit to keep the fixture deterministic. Do not rerun these inserts against an already-seeded database; duplicate keys should fail rather than silently change the fixture.</p>
+<pre><code class="language-sql">CREATE TABLE orders (
+    order_id INTEGER PRIMARY KEY,
+    ordered_at DATETIME NOT NULL,
+    status VARCHAR(20) NOT NULL
+);
+CREATE TABLE order_lines (
+    line_id INTEGER PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit_price DECIMAL(12, 2) NOT NULL,
+    line_discount DECIMAL(12, 2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id)
+);
+INSERT INTO orders VALUES (100, '2026-01-05 10:00:00', 'shipped');
+INSERT INTO order_lines VALUES
+    (1, 100, 10, 4, 5.00, 2.00),
+    (2, 100, 20, 3, 9.00, 0.00);
+
+SELECT SUM(l.quantity * l.unit_price - l.line_discount) AS net_sales
+FROM order_lines AS l
+JOIN orders AS o ON l.order_id = o.order_id
+WHERE o.status = 'shipped';
+-- Expected: 45.00, from two lines belonging to one order.
+</code></pre>
+<p><strong>When:</strong> transactions and referential constraints belong at the operational source. Document that this fixture's timestamps are UTC. The larger project adds product/factory tables, checks, and reliable change timestamps before incremental extraction. <a href="https://dev.mysql.com/doc/refman/8.4/en/tutorial.html">MySQL tutorial</a></p>
+</div></details><details class="example" id="example-dlt"><summary>dlt · Extract and load a small full snapshot</summary><div class="example-body"><p><strong>Milestone M2. File: <code>ingestion/load.py</code>. Requires dlt SQL/ClickHouse dependencies, a MySQL driver, source credentials, and a configured ClickHouse destination.</strong> <code>MYSQL_SOURCE_URL</code> is a server-side SQLAlchemy MySQL URL supplied through the environment, never committed. Do not execute until the destination is an isolated tutorial database.</p>
+<pre><code class="language-python">import os
+import dlt
+from dlt.sources.sql_database import sql_database
+
+source = sql_database(
+    credentials=os.environ[&quot;MYSQL_SOURCE_URL&quot;],
+    table_names=[&quot;orders&quot;, &quot;order_lines&quot;],
+)
+pipeline = dlt.pipeline(
+    pipeline_name=&quot;factory_tutorial&quot;,
+    destination=&quot;clickhouse&quot;,
+    dataset_name=&quot;raw&quot;,
+)
+# Full snapshot of these selected tables; replaces their destination data.
+load_info = pipeline.run(source, write_disposition=&quot;replace&quot;)
+print(load_info)
+</code></pre>
+<p><strong>Companion config: <code>.dlt/config.toml</code>.</strong> The separator is explicit because dlt emulates datasets with table-name prefixes in ClickHouse. With this configuration, inspect <code>raw__orders</code> and <code>raw__order_lines</code> in the destination database. Do not assume that <code>raw</code> is a native nested schema.</p>
+<pre><code class="language-toml">[destination.clickhouse]
+dataset_table_separator = &quot;__&quot;
+</code></pre>
+<p><strong>Credentials:</strong> provision the <code>factory_raw</code> ClickHouse database and destination credentials separately. The dlt destination needs the correct native and HTTP ports plus TLS settings for that endpoint; a single generic port is not sufficient configuration. Keep <code>.dlt/secrets.toml</code> outside Git or use dlt's environment configuration. This excerpt does not implement incremental polling or deletes. <a href="https://dlthub.com/docs/dlt-ecosystem/destinations/clickhouse">Destination setup and dataset behavior</a></p>
+</div></details><details class="example" id="example-clickhouse"><summary>ClickHouse · Check facts instead of trusting keys</summary><div class="example-body"><p><strong>Milestone M2. Requires the preceding load into <code>factory_raw</code>.</strong> The first query should return two rows and two distinct business keys. The second should return no rows.</p>
+<pre><code class="language-sql">SELECT
+    count() AS loaded_rows,
+    uniqExact(line_id) AS unique_lines
+FROM factory_raw.raw__order_lines;
+
+SELECT line_id, count() AS copies
+FROM factory_raw.raw__order_lines
+GROUP BY line_id
+HAVING copies &gt; 1;
+</code></pre>
+<p><strong>When:</strong> after loading or replaying a batch, verify logical uniqueness. ClickHouse primary keys do not enforce it for you. <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">MergeTree key behavior</a></p>
+</div></details><details class="example" id="example-dbt"><summary>dbt · Turn source rows into a business model</summary><div class="example-body"><p><strong>Milestone M3. Requires an initialized dbt project, a compatible <code>dbt-clickhouse</code> adapter, and a working profile targeting <code>factory_analytics</code>.</strong> First declare the actual loaded table names in <code>models/sources.yml</code>:</p>
+<pre><code class="language-yaml">version: 2
+sources:
+  - name: factory
+    schema: factory_raw
+    tables:
+      - name: orders
+        identifier: raw__orders
+      - name: order_lines
+        identifier: raw__order_lines
+</code></pre>
+<p><strong>File: <code>models/fct_order_line.sql</code>.</strong> For this small first model, source references are direct; later lessons introduce staging models. It deliberately preserves <strong>one row per shipped order line</strong>.</p>
+<pre><code class="language-sql">{{ config(materialized='table', order_by='line_id') }}
+
+SELECT
+    l.line_id,
+    l.product_id,
+    toDate(o.ordered_at) AS sales_date,
+    l.quantity * l.unit_price - l.line_discount AS net_sales
+FROM {{ source('factory', 'order_lines') }} AS l
+JOIN {{ source('factory', 'orders') }} AS o
+    ON l.order_id = o.order_id
+WHERE o.status = 'shipped'
+</code></pre>
+<p><strong>File: <code>models/mart_daily_sales.sql</code>.</strong> Aggregate the fact only after establishing its grain.</p>
+<pre><code class="language-sql">{{ config(materialized='table', order_by='sales_date') }}
+
+SELECT sales_date, sum(net_sales) AS net_sales
+FROM {{ ref('fct_order_line') }}
+GROUP BY sales_date
+</code></pre>
+<p><strong>File: <code>models/schema.yml</code>.</strong> A duplicate key should fail a test rather than quietly inflate a chart.</p>
+<pre><code class="language-yaml">version: 2
+models:
+  - name: fct_order_line
+    columns:
+      - name: line_id
+        data_tests:
+          - unique
+          - not_null
+  - name: mart_daily_sales
+    columns:
+      - name: sales_date
+        data_tests:
+          - unique
+          - not_null
+</code></pre>
+<p>Run <code>dbt debug</code>, then <code>dbt build</code>. Expected fixture result: one daily row for 2026-01-05 with net sales of 45.00. Rebuilding a table is sufficient at this scale; incremental materializations arrive only after comparison with a correct full rebuild. <a href="https://clickhouse.com/docs/integrations/dbt">ClickHouse adapter</a> · <a href="https://docs.getdbt.com/docs/build/data-tests">dbt data tests</a></p>
+</div></details><details class="example" id="example-dagster"><summary>Dagster · Put a dependency between the two jobs</summary><div class="example-body"><p><strong>Milestone M6. File: <code>orchestration/definitions.py</code>. Requires Dagster, the preceding ingestion script, and a configured dbt project in <code>warehouse/</code>. Start commands from the project root.</strong> This minimal bridge uses existing CLI entry points so the dependency is easy to see; the later milestone replaces coarse CLI assets with the dlt/dbt integrations for richer lineage.</p>
+<pre><code class="language-python">import subprocess
+import sys
+from dagster import Definitions, ScheduleDefinition, asset, define_asset_job
+
+@asset
+def raw_factory():
+    subprocess.run([sys.executable, &quot;ingestion/load.py&quot;], check=True)
+
+@asset(deps=[raw_factory])
+def factory_marts():
+    subprocess.run([&quot;dbt&quot;, &quot;build&quot;], cwd=&quot;warehouse&quot;, check=True)
+
+hourly_factory = define_asset_job(
+    &quot;hourly_factory&quot;, selection=[&quot;raw_factory&quot;, &quot;factory_marts&quot;]
+)
+defs = Definitions(
+    assets=[raw_factory, factory_marts],
+    jobs=[hourly_factory],
+    schedules=[ScheduleDefinition(
+        job=hourly_factory,
+        cron_schedule=&quot;0 * * * *&quot;,
+        execution_timezone=&quot;UTC&quot;,
+    )],
+)
+</code></pre>
+<p><strong>Boundary:</strong> a schedule needs a running Dagster daemon and must be enabled. <code>dbt build</code> returns an error when required tests fail, but this excerpt does not implement candidate-mart promotion or protect a previously published release. Those are explicit deployment tasks. <a href="https://docs.dagster.io/integrations/libraries/dbt">Dagster integrations and richer lineage</a></p>
+</div></details><details class="example" id="example-shared-query"><summary>Shared query · Keep credentials on the server</summary><div class="example-body"><p><strong>Milestone M7. File: <code>analytics.py</code>. Requires <code>clickhouse-connect</code>, the built daily mart, a TLS-enabled ClickHouse HTTP endpoint, and a read-only account.</strong> Set <code>CLICKHOUSE_HOST</code>, <code>CLICKHOUSE_HTTPS_PORT</code>, <code>CLICKHOUSE_READ_USER</code>, and <code>CLICKHOUSE_READ_PASSWORD</code> outside the code. This example requires TLS; local non-TLS development needs deliberately different configuration.</p>
+<pre><code class="language-python">import os
+import clickhouse_connect
+
+def fetch_daily_sales():
+    client = clickhouse_connect.get_client(
+        host=os.environ[&quot;CLICKHOUSE_HOST&quot;],
+        port=int(os.environ[&quot;CLICKHOUSE_HTTPS_PORT&quot;]),
+        username=os.environ[&quot;CLICKHOUSE_READ_USER&quot;],
+        password=os.environ[&quot;CLICKHOUSE_READ_PASSWORD&quot;],
+        secure=True,
+    )
+    try:
+        return client.query(
+            &quot;SELECT sales_date, net_sales &quot;
+            &quot;FROM factory_analytics.mart_daily_sales &quot;
+            &quot;ORDER BY sales_date DESC LIMIT 30&quot;
+        ).result_rows
+    finally:
+        client.close()
+</code></pre>
+<p><strong>When:</strong> both UIs should read the same modeled metric. Do not copy warehouse credentials into browser code. This fixed query has no user-supplied SQL; when filters arrive, bind parameters rather than interpolating input.</p>
+</div></details><details class="example" id="example-streamlit"><summary>Streamlit · Show the validated metric</summary><div class="example-body"><p><strong>Milestone M7. File: <code>streamlit_app.py</code>. Requires Streamlit and <code>analytics.py</code> on the Python import path.</strong> Run <code>streamlit run streamlit_app.py</code> in the configured server environment.</p>
+<pre><code class="language-python">import streamlit as st
+from analytics import fetch_daily_sales
+
+st.title(&quot;Ice cream factory · Daily sales&quot;)
+st.caption(&quot;Synthetic tutorial data · USD · excludes taxes and returns&quot;)
+
+@st.cache_data(ttl=60)
+def load_sales():
+    return [
+        {&quot;date&quot;: str(day), &quot;net_sales_usd&quot;: float(amount)}
+        for day, amount in fetch_daily_sales()
+    ]
+
+try:
+    rows = load_sales()
+    if rows:
+        st.dataframe(rows, hide_index=True)
+    else:
+        st.info(&quot;No sales rows are available for this dataset.&quot;)
+except Exception:
+    st.error(&quot;Sales are unavailable. Check the warehouse connection and retry.&quot;)
+st.caption(&quot;Results may be cached for 60 seconds. Cache age is not source freshness.&quot;)
+</code></pre>
+<p><strong>Boundary:</strong> conversion to float here is for display only; calculations remain decimal in SQL/Python. A production dashboard also needs server-side diagnostics and a genuine last-validated publication timestamp, not a fabricated “updated just now.” <a href="https://docs.streamlit.io/develop/concepts/connections/connecting-to-data">Streamlit connection/caching guidance</a></p>
+</div></details><details class="example" id="example-reflex"><summary>Reflex · Reuse the mart, not a second pipeline</summary><div class="example-body"><p><strong>Milestone M7. Place in the main module of an initialized Reflex project.</strong> Copy <code>analytics.py</code> into its import path and configure the same read-only environment variables. Start with <code>reflex run</code> from that project. This is a minimal synchronous read example; it is not a production load-management design.</p>
+<pre><code class="language-python">import logging
+import reflex as rx
+from analytics import fetch_daily_sales
+
+class SalesState(rx.State):
+    rows: list[dict[str, str]] = []
+    error: str = &quot;&quot;
+
+    @rx.event
+    def refresh(self):
+        self.error = &quot;&quot;
+        try:
+            self.rows = [
+                {&quot;date&quot;: str(day), &quot;amount&quot;: f&quot;${amount:.2f}&quot;}
+                for day, amount in fetch_daily_sales()
+            ]
+        except Exception:
+            logging.exception(&quot;Factory sales query failed&quot;)
+            self.rows = []
+            self.error = &quot;Sales unavailable. Check the connection and retry.&quot;
+
+def sales_row(row):
+    return rx.hstack(rx.text(row[&quot;date&quot;]), rx.text(row[&quot;amount&quot;]))
+
+def index():
+    return rx.vstack(
+        rx.heading(&quot;Factory daily sales&quot;),
+        rx.text(&quot;Synthetic USD data; taxes and returns excluded.&quot;),
+        rx.button(&quot;Load sales&quot;, on_click=SalesState.refresh),
+        rx.text(SalesState.error, role=&quot;status&quot;),
+        rx.foreach(SalesState.rows, sales_row),
+    )
+
+app = rx.App()
+app.add_page(index)
+</code></pre>
+<p><strong>When:</strong> use Reflex for a more application-like stateful interaction. Both apps query the warehouse; neither launches dlt on page load. Self-hosting must account for the version's backend and WebSocket requirements. <a href="https://reflex.dev/docs/hosting/self-hosting/">Reflex self-hosting</a></p>
+</div></details><details class="example" id="example-monitoring"><summary>Monitoring · Test a freshness boundary</summary><div class="example-body"><p><strong>Milestone M10. File: <code>freshness_check.py</code>. Runnable as-is with Python.</strong> An hourly pipeline has a proposed 90-minute validated-publication target. Test the exact boundary and stale condition; do not infer event-time freshness from a successful historical backfill.</p>
+<pre><code class="language-python">from datetime import datetime, timedelta, timezone
+
+now = datetime(2026, 1, 5, 12, 0, tzinfo=timezone.utc)
+limit = timedelta(minutes=90)
+
+def is_stale(validated_at, observed_at):
+    if validated_at.tzinfo is None or observed_at.tzinfo is None:
+        raise ValueError(&quot;Use timezone-aware timestamps&quot;)
+    age = observed_at - validated_at
+    if age &lt; timedelta(0):
+        raise ValueError(&quot;Validation time cannot be in the future&quot;)
+    return age &gt; limit
+
+assert not is_stale(now - timedelta(minutes=90), now)
+assert is_stale(now - timedelta(minutes=91), now)
+print(&quot;Freshness boundary checks passed&quot;)
+</code></pre>
+<p><strong>Deployment exercise:</strong> run real checks outside the scheduler's own failure domain, send a test alert to a channel you receive, and restore a backup to an isolated target. These snippets do not provision services, implement alert delivery, or establish production reliability. <a href="https://docs.dagster.io/deployment/oss/oss-instance-configuration">Dagster instance/run monitoring</a></p>
+</div></details></div>
+      </section>
+
+      <section id="field-notes" class="chapter" aria-labelledby="notes-title">
+        <div class="section-heading"><h2 id="notes-title">Keep the fundamentals close.</h2><a href="reference/glossary.html">Print the glossary</a></div>
+        <p>The full project definitions, metric contracts, tool choices, study rhythm, and deployment boundaries remain part of the course—not just the code.</p>
+        <details class="handbook" id="notes-definitions"><summary>Fundamental definitions</summary><div class="handbook-body"><p>Learn these through the project; do not memorize the entire table before starting. The modeling vocabulary follows <a href="https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/">Kimball</a><a href="https://www.kimballgroup.com/2008/11/fact-tables/">r2</a>; loading behavior follows <a href="https://dlthub.com/docs/general-usage/incremental-loading">dlt</a>; physical key behavior follows <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">ClickHouse</a>. Operational targets below are course proposals, not universal standards. Local setup follows <a href="https://docs.python.org/3/tutorial/venv.html">Python environments</a> and <a href="https://docs.astral.sh/uv/guides/projects/">uv project structure</a>.</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Working definition / factory example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Virtual environment</td>
+<td>An isolated Python environment for installed packages; this course uses uv-managed <code>.venv</code>, separate from system Python</td>
+</tr>
+<tr>
+<td>Dependency lockfile</td>
+<td>A tool-managed record of resolved dependencies used to recreate an environment; <code>uv.lock</code> is not the installed environment or a full-stack compatibility test</td>
+</tr>
+<tr>
+<td>Data pipeline</td>
+<td>Repeatable steps moving and processing data from a source to a useful destination</td>
+</tr>
+<tr>
+<td>Data warehouse</td>
+<td>Integrated, historically useful analytical data organized for answering business questions</td>
+</tr>
+<tr>
+<td>OLTP</td>
+<td>Transaction-oriented work: recording an order or stock movement in MySQL</td>
+</tr>
+<tr>
+<td>OLAP</td>
+<td>Analysis-oriented work: aggregating a year of sales by product in ClickHouse</td>
+</tr>
+<tr>
+<td>ETL / ELT</td>
+<td>Transform before loading / load before transforming; this course uses the latter</td>
+</tr>
+<tr>
+<td>Batch / streaming</td>
+<td>Process bounded groups periodically / process a continuing flow; latency requirements drive the choice</td>
+</tr>
+<tr>
+<td>Raw / staging / mart</td>
+<td>Source-oriented loaded data / cleaned and standardized models / business-ready models</td>
+</tr>
+<tr>
+<td>Data mart</td>
+<td>A focused analytical dataset for a subject or audience; can be a table or view within the warehouse, not the dashboard itself</td>
+</tr>
+<tr>
+<td>Source / destination</td>
+<td>The data read from / written to by a particular step; one step's destination can be another step's source</td>
+</tr>
+<tr>
+<td>Grain</td>
+<td>The precise meaning of one row; for example, one order line, not vaguely “sales data”</td>
+</tr>
+<tr>
+<td>Fact / dimension</td>
+<td>A measured business event or snapshot / descriptive context such as product or factory</td>
+</tr>
+<tr>
+<td>Star schema</td>
+<td>Fact tables connected to descriptive dimensions at explicitly declared grains</td>
+</tr>
+<tr>
+<td>Conformed dimension</td>
+<td>A consistently defined dimension shared across processes, such as product in sales and production</td>
+</tr>
+<tr>
+<td>Natural / surrogate key</td>
+<td>An identifier from the source / an identifier assigned for warehouse modeling</td>
+</tr>
+<tr>
+<td>SCD type 1 / type 2</td>
+<td>Overwrite an attribute / preserve versions with validity periods; type 2 requires correct historical lookup</td>
+</tr>
+<tr>
+<td>Transaction / snapshot fact</td>
+<td>A row for an event / a row describing a state over a defined interval or at a defined time</td>
+</tr>
+<tr>
+<td>Additive / semi-additive measure</td>
+<td>Can be summed over relevant dimensions / cannot be summed over some dimension, such as inventory over time</td>
+</tr>
+<tr>
+<td>Full / incremental load</td>
+<td>Read all relevant source rows / read only a bounded set of new or changed rows</td>
+</tr>
+<tr>
+<td>Cursor / watermark</td>
+<td>Column used to select progress / saved progress boundary; this is not a guarantee that every change was observed</td>
+</tr>
+<tr>
+<td>Append / merge / replace</td>
+<td>Add rows / apply key-based changes / replace a selected destination scope; extraction and write mode are separate choices</td>
+</tr>
+<tr>
+<td>Idempotency</td>
+<td>Rerunning the same logical work does not duplicate facts or change the intended business answer</td>
+</tr>
+<tr>
+<td>CDC</td>
+<td>Change data capture: changes, including deletes when supported, obtained from a change mechanism such as a database log; timestamp polling is not log-based CDC</td>
+</tr>
+<tr>
+<td>Event time / processing time</td>
+<td>When a stock movement happened / when the pipeline handled it</td>
+</tr>
+<tr>
+<td>Late-arriving data</td>
+<td>A record arriving after its event-time period was already processed</td>
+</tr>
+<tr>
+<td>Backfill</td>
+<td>Controlled processing of a past interval, without unintentionally changing normal incremental progress</td>
+</tr>
+<tr>
+<td>DAG / asset / materialization</td>
+<td>A directed dependency graph / a meaningful data object / execution that produces or updates it</td>
+</tr>
+<tr>
+<td>Data contract / data test</td>
+<td>Agreed structure, semantics, and expectations / an executable check of those expectations</td>
+</tr>
+<tr>
+<td>Lineage</td>
+<td>Traceable dependencies from source columns and models to a reported number</td>
+</tr>
+<tr>
+<td>Freshness / completeness</td>
+<td>How recent relevant data is / whether the expected data is present; neither follows from a green run alone</td>
+</tr>
+<tr>
+<td>SLI / SLO</td>
+<td>Measured service indicator / chosen target for it, such as age of the latest validated mart</td>
+</tr>
+<tr>
+<td>RPO / RTO</td>
+<td>Maximum acceptable data loss interval / maximum acceptable recovery time; backups must be restore-tested</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>ClickHouse trap:</strong> its primary key does not enforce uniqueness. A MySQL primary key, a dlt merge key, a dbt model's <code>unique_key</code>, and a ClickHouse sorting/primary key are not interchangeable guarantees. Test uniqueness explicitly. <a href="https://dlthub.com/docs/dlt-ecosystem/destinations/clickhouse">R6</a> <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">R9</a> <a href="https://docs.getdbt.com/docs/build/data-tests">R11</a></p>
+</div></details><details class="handbook" id="notes-tools"><summary>What each tool does—and when not to use it</summary><div class="handbook-body"><div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Setup / first use</th>
+<th>Use it when…</th>
+<th>Do not confuse it with…</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python</td>
+<td>Isolated environment, supported version, locked packages; run the simulator and a tested CLI</td>
+<td>You need extraction glue, deterministic fixtures, validation, or automation</td>
+<td>A reason to rewrite warehouse SQL transformations in Python</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>Container, persistent volume, migrations, seed data, separate users</td>
+<td>The source application needs relational transactions and constraints</td>
+<td>A ban on analytics in MySQL; small reporting workloads may not need another system</td>
+</tr>
+<tr>
+<td>dlt</td>
+<td>SQL source + MySQL driver + ClickHouse destination; externalized secrets</td>
+<td>You need repeatable Python-based extraction/loading with schema and state handling</td>
+<td>Dagster scheduling, dbt modeling, or automatic capture of MySQL hard deletes</td>
+</tr>
+<tr>
+<td>ClickHouse</td>
+<td>Persistent service, scoped users, tested client connection</td>
+<td>Analytical scans/aggregations justify a column-oriented engine</td>
+<td>A drop-in OLTP replacement or uniqueness-enforcing relational store</td>
+</tr>
+<tr>
+<td>dbt + <code>dbt-clickhouse</code></td>
+<td>Compatible adapter/core, profile, sources, <code>dbt debug</code>, first model</td>
+<td>SQL transformations need dependencies, tests, documentation, and repeatable builds</td>
+<td>A source extractor; adapter-specific behavior must be verified</td>
+</tr>
+<tr>
+<td>Dagster</td>
+<td><code>dagster-dlt</code> / <code>dagster-dbt</code>, asset definitions, persistent instance later</td>
+<td>Multiple dependent steps need scheduling, lineage, retries, and backfills</td>
+<td>The transformation engine itself or a requirement for a single exploratory script</td>
+</tr>
+<tr>
+<td>Streamlit</td>
+<td>Read-only ClickHouse connection, secrets, cache policy</td>
+<td>You need an internal analytical dashboard quickly in Python</td>
+<td>A production ERP or an excuse to query source transactions from every chart</td>
+</tr>
+<tr>
+<td>Reflex</td>
+<td>Separate app environment if dependencies conflict; read-only server-side queries</td>
+<td>You need a more application-like, stateful Python UI</td>
+<td>A necessary extra pipeline stage or a reason to rebuild every dashboard feature</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Architecture comparison:</strong> the chosen milestone approach delivers one increasingly reliable system. Tool-by-tool study isolates APIs but delays integration; it was considered and not selected. A streaming-first build adds operational complexity before a demonstrated latency requirement, so it is deferred.</p>
+</div></details><details class="handbook" id="notes-project"><summary>The project, source grains, and metric contracts</summary><div class="handbook-body"><ol>
+<li>Explain OLTP versus OLAP, ETL versus ELT, and batch versus streaming using business requirements rather than tool names.</li>
+<li>Design a warehouse around explicit fact-table grains and consistent dimensions.</li>
+<li>Extract MySQL data with Python/dlt, load ClickHouse, and build tested dbt models.</li>
+<li>Handle reruns, incremental state, changed records, soft deletes, late data, and backfills deliberately.</li>
+<li>Orchestrate assets with Dagster and distinguish successful execution from correct, fresh data.</li>
+<li>Build a Streamlit dashboard and a small Reflex application against the same trusted marts.</li>
+<li>Package, deploy, monitor, troubleshoot, restore, and explain the resulting system.</li>
+<li>Defend what you did <strong>not</strong> build: no streaming cluster or elaborate infrastructure without a requirement.</li>
+</ol>
+<h2 id="project-2-the-business-project">2. The business project</h2>
+<p>You are the data engineer for a fictional factory making vanilla, chocolate, and strawberry ice cream. Start with one factory and synthetic data; add a second factory only when practicing conformed dimensions and comparisons.</p>
+<h3 id="project-business-questions">Business questions</h3>
+<ul>
+<li>Which products sell most, and what is their net shipped sales value?</li>
+<li>How much planned production becomes accepted finished product?</li>
+<li>Which products or lines have the highest waste rate?</li>
+<li>What was the end-of-day stock of each product at each factory?</li>
+<li>Can a manager trust these numbers, and how old is the underlying data?</li>
+</ul>
+<h3 id="project-small-source-schema">Small source schema</h3>
+<p>Build these progressively, not all in the first session:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Source table</th>
+<th>Meaning / intended row grain</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>products</code></td>
+<td>One current product/SKU; includes pack size and flavor</td>
+</tr>
+<tr>
+<td><code>factories</code></td>
+<td>One factory</td>
+</tr>
+<tr>
+<td><code>production_lines</code></td>
+<td>One production line belonging to a factory</td>
+</tr>
+<tr>
+<td><code>orders</code></td>
+<td>One sales order header with status and business timestamps</td>
+</tr>
+<tr>
+<td><code>order_lines</code></td>
+<td>One product line within an order</td>
+</tr>
+<tr>
+<td><code>production_batches</code></td>
+<td>One batch on one line, with planned, actual, and accepted output in kg</td>
+</tr>
+<tr>
+<td><code>waste_events</code></td>
+<td>One recorded disposal event in kg, with reason and batch reference where known</td>
+</tr>
+<tr>
+<td><code>inventory_movements</code></td>
+<td>One signed finished-goods stock movement in kg, with product, factory, and event time</td>
+</tr>
+</tbody>
+</table></div>
+<p>Use stable source IDs, explicit units, UTC storage, a documented business-day timezone, and <code>updated_at</code> where records can change. Small reproducible fixtures establish expected answers; larger synthetic datasets are for experimentation, not proof of correctness.</p>
+<h3 id="project-metric-contracts-before-dashboards">Metric contracts, before dashboards</h3>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Initial project definition</th>
+<th>Important limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Net shipped sales</td>
+<td>Sum <code>quantity × unit_price − line_discount</code> for shipped order lines in one agreed currency</td>
+<td>Excludes taxes, returns, credit notes, and formal revenue-recognition rules; label it accurately</td>
+</tr>
+<tr>
+<td>Accepted output</td>
+<td>Sum accepted batch output in kg</td>
+<td>Do not mix kg, liters, and pack counts without an explicit conversion</td>
+</tr>
+<tr>
+<td>Production yield</td>
+<td><code>sum(accepted_output_kg) / sum(actual_output_kg)</code> for completed batches</td>
+<td>Weighted ratio, not an average of per-batch percentages; zero denominator produces null</td>
+</tr>
+<tr>
+<td>Waste rate</td>
+<td><code>sum(waste_kg) / sum(actual_output_kg)</code> over the same factory/time scope</td>
+<td>Disposal timing can differ from production timing; reconcile before interpreting</td>
+</tr>
+<tr>
+<td>Closing stock</td>
+<td>Opening balance plus signed movements through business-day end</td>
+<td>Additive across products/factories at a fixed time, not across snapshot dates</td>
+</tr>
+</tbody>
+</table></div>
+<p>Keep waste categories and output definitions explicit so recorded waste is not counted twice. Production and sales are different processes: aggregate each to a compatible grain before comparing them. No invented profit, demand forecast, or OEE without the data those measures require.</p>
+</div></details><details class="handbook" id="notes-rhythm"><summary>Study rhythm, retention, and feedback</summary><div class="handbook-body"><p>A suggested <strong>6-hour core</strong>, with up to <strong>2 optional hours</strong>:</p>
+<ul>
+<li><strong>30 min:</strong> closed-book recall from previous weeks.</li>
+<li><strong>60 min:</strong> one concept and a targeted section of a primary source.</li>
+<li><strong>90 min:</strong> coding along with a short guided lesson.</li>
+<li><strong>120 min:</strong> independent variation and automated checks.</li>
+<li><strong>60 min:</strong> troubleshoot, explain your decision, and commit a working checkpoint.</li>
+<li><strong>Optional 0–120 min:</strong> deeper reading, larger data, or interview practice.</li>
+</ul>
+<p>A guided lesson should take about 15–25 minutes and teach one thing; a week's coding-along consists of several small lessons rather than one huge HTML page. Future lessons live in <code>lessons/</code>, reusable components in <code>assets/</code>, and printable references in <code>reference/</code>. They are not pre-generated as part of this syllabus.</p>
+<p><strong>Feedback loop:</strong> predict the result → run the code → inspect the check → explain the difference → fix → rerun. After coding along, change the product, date, source update, or failure condition without copying the solution.</p>
+<p><strong>Retention:</strong> revisit an idea roughly 1, 7, and 21 days after learning it. Interleave practical tasks later: fix a duplicate, identify a grain error, and diagnose stale data in the same exercise. Future quizzes should balance answer length and vary correct-answer positions.</p>
+</div></details><details class="handbook" id="notes-operations"><summary>Monitoring targets, deployment boundaries, and final assessment</summary><div class="handbook-body"><p>These are <strong>proposed lab targets</strong>, to test and revise against the host and fixture volume, not claims of achieved reliability:</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Proposed target / exercise</th>
+<th>Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data freshness</td>
+<td>Hourly runs; latest validated mart age ≤ 90 minutes during expected operation</td>
+<td>Check source heartbeat → ingestion state → dbt/checks → release metadata</td>
+</tr>
+<tr>
+<td>Execution failures</td>
+<td>Alert after bounded retries are exhausted</td>
+<td>Inspect the first failing stage; do not retry destructive operations blindly</td>
+</tr>
+<tr>
+<td>Data correctness</td>
+<td>Zero unexpected duplicate fact keys or reconciliation differences on the known fixture</td>
+<td>Keep the failing candidate out of the validated release; inspect grain and changes</td>
+</tr>
+<tr>
+<td>Volume/completeness</td>
+<td>Compare with known fixture expectations first; add business-calendar thresholds later</td>
+<td>Check missing source days, filters, partial loads, and legitimate quiet periods</td>
+</tr>
+<tr>
+<td>Query performance</td>
+<td>Record query, data size, cache state, p50/p95 timing, and rows/bytes read</td>
+<td>Inspect query log/plan before changing keys or adding pre-aggregation</td>
+</tr>
+<tr>
+<td>Service availability</td>
+<td>Independent periodic check of app, daemon/heartbeat, and host health</td>
+<td>Restore the failed component and verify actual data progress</td>
+</tr>
+<tr>
+<td>Capacity</td>
+<td>Alert at a documented safe disk/memory threshold before exhaustion</td>
+<td>Stop unnecessary work, investigate growth, follow retention policy; do not delete warehouse files manually</td>
+</tr>
+<tr>
+<td>Restore</td>
+<td>Proposed RPO ≤ 24 hours and RTO ≤ 2 hours for the small demo</td>
+<td>Test an off-host backup restore and replay; document observed results honestly</td>
+</tr>
+</tbody>
+</table></div>
+<p>A historical backfill completing now does not make today's data fresh. Display the processed coverage period, source event watermark, and last validated publication time as distinct values.</p>
+<h2 id="operations-6-portfolio-artifacts-and-milestone-assessment">6. Portfolio artifacts and milestone assessment</h2>
+<p>The project grows toward this shape; <strong>these application files are planned, not created yet</strong>:</p>
+<pre><code class="language-text">project/
+  simulator/             deterministic source data and changes
+  ingestion/             dlt sources and pipelines
+  warehouse/             dbt sources, staging, dimensions, facts, marts, tests
+  orchestration/         Dagster assets, schedules, checks, configuration
+  apps/streamlit/        primary dashboard
+  apps/reflex/           small alternate consumer
+  tests/                 fixtures, unit and integration checks
+  deploy/                Compose, images, environment template, access configuration
+  docs/                  architecture, metric dictionary, decisions, runbooks
+  .github/workflows/     CI if GitHub is the selected host
+</code></pre>
+<p>At <strong>every milestone</strong>, demonstrate four things:</p>
+<ol>
+<li><strong>Build:</strong> run it from the documented checkpoint.</li>
+<li><strong>Verify:</strong> pass the specified checks on deterministic data.</li>
+<li><strong>Break and repair:</strong> reproduce a relevant failure safely, then restore correctness.</li>
+<li><strong>Explain:</strong> give a two-minute account of the design, its alternative, and its limitations.</li>
+</ol>
+<p>Keep a small set of expected fixture answers in version control. Screenshots and green job badges do not substitute for reconciled results.</p>
+<h2 id="operations-final-assessment">Final assessment</h2>
+<h3 id="operations-practical-examination">Practical examination</h3>
+<p>Without copying the guided solution:</p>
+<ol>
+<li>Add a new flavor/SKU and a production batch.</li>
+<li>Update yesterday's order and add a late inventory movement.</li>
+<li>Run ingestion and recompute the affected models.</li>
+<li>Show the same corrected numbers in SQL, Streamlit, and Reflex.</li>
+<li>Fail a required data check and show that the candidate is not presented as validated.</li>
+<li>Diagnose and recover a stopped service, then rerun without duplicates.</li>
+<li>Restore a small backup to an isolated target and prove one day's metrics match.</li>
+</ol>
+<h3 id="operations-interview-explanation">Interview explanation</h3>
+<p>Present the business requirement, source schema, fact grains, data flow, incremental strategy, failure handling, deployment boundary, performance evidence, and one deliberate simplification. Then answer: <strong>“What would need to change if we required five-second freshness or ten times the data?”</strong> Discuss evidence and trade-offs; do not reflexively add Kafka, Kubernetes, or more services.</p>
+<h3 id="operations-completion-rule">Completion rule</h3>
+<p>All milestone checks pass, a clean setup is reproducible, recovery is demonstrated, and you can independently explain and modify the system. This establishes a strong practical foundation; deeper mastery comes from maintaining real systems and encountering new workloads.</p>
+<h2 id="operations-7-wisdom-get-one-small-design-reviewed">7. Wisdom: get one small design reviewed</h2>
+<p>After M3, ask an experienced practitioner to review a fact-table grain and its tests. After M10, request critique of the architecture or recovery runbook. Optional official communities are listed in <a href="RESOURCES.md#wisdom-communities">RESOURCES.md</a>. Share synthetic data and a minimal example, never credentials or private business records. Community participation is optional.</p>
+<h2 id="operations-8-deliberate-scope-limits-and-open-decisions">8. Deliberate scope limits and open decisions</h2>
+<p><strong>Deferred, not required for this first course:</strong> Kafka, Spark, Kubernetes, Airflow, a data lake/lakehouse, log-based CDC implementation, multi-region replication, machine learning forecasting, a full factory ERP, and a second feature-complete frontend. Learn what problems they solve, but do not build them without a requirement.</p>
+<p><strong>Setup established:</strong> Windows / WSL, at least 16 GB RAM reported, Docker not installed; selected uv for Python environments and dependency locking. <strong>Still to verify:</strong> exact Windows build/architecture, virtualization, available memory/disk, Docker Desktop eligibility and installation, deployment provider/budget, DLT naming, and the full installed version matrix. Confirm metric definitions before treating reports as business truth. The fixture and lesson self-checks run on the authoring host; the learner's Windows setup, full package integrations, databases, and deployment have not been verified.</p>
+<p><strong>Start learning:</strong> <a href="lessons/0001-from-order-to-insight.html">Lesson 1: from one order to an insight</a> covers the architectural vocabulary with a visual path, Python example, and retrieval practice. Share your exit explanation with the teaching agent before moving to environment setup. Ask follow-up questions whenever terminology or a design decision is unclear.</p>
+</div></details>
+      </section>
+
+      <section id="self-check" class="chapter" aria-labelledby="check-title">
+        <h2 id="check-title">A small check before you move on.</h2>
+        <p>Recall without looking: in <code>fct_order_line</code>, what does one row represent?</p>
+        <form id="grain-quiz" hidden>
+          <fieldset><legend>Choose the model’s grain</legend><label><input type="radio" name="grain" value="daily"> One factory daily total</label><label><input type="radio" name="grain" value="line"> One sales order line</label><label><input type="radio" name="grain" value="product"> One product master record</label></fieldset>
+          <button class="primary-button" type="submit">Check my answer</button>
+          <p id="quiz-feedback" class="feedback" role="status">Choose from memory, then check your reasoning.</p>
+        </form>
+        <noscript><details><summary>Reveal the answer</summary><p>One sales order line. A daily total is an aggregate; a product master row is a dimension. Mixing these grains can multiply sales.</p></details></noscript>
+        <p>Revisit this tomorrow, next week, and three weeks from now. If anything is unclear, ask your teaching agent to explain it using a different factory example.</p>
+      </section>
+
+      <section id="sources" class="chapter" aria-labelledby="sources-title">
+        <h2 id="sources-title">Learn from the people who own the tools.</h2>
+        <p>Primary documentation grounds the course. APIs and hosting requirements can change; verify the version matrix during setup. All links require internet, but the guide itself works offline.</p>
+        <details class="handbook"><summary>Readings, optional communities, and known gaps</summary><div class="handbook-body"><p>Sources consulted while preparing the syllabus. Documentation is live: recheck APIs, supported versions, and examples when creating each lab. Reading a page does not establish that a particular package combination runs successfully.</p>
+<h2 id="source-knowledge">Knowledge</h2>
+<h3 id="source-architecture-and-modeling">Architecture and modeling</h3>
+<ul>
+<li><strong>[R1] <a href="https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/">Kimball Group: dimensional modeling techniques</a></strong>
+Primary practitioner reference for business processes, grain, dimensions, facts, conformed dimensions, and slowly changing dimensions. Use for architecture and warehouse-modeling decisions.</li>
+<li><strong>[R2] <a href="https://www.kimballgroup.com/2008/11/fact-tables/">Kimball Group: fact tables</a></strong>
+Explains transaction, periodic snapshot, and accumulating snapshot grains. Use before modeling sales, batches, or inventory, particularly to avoid mixing measurement grains.</li>
+</ul>
+<h3 id="source-first-lesson-architectural-vocabulary">First lesson: architectural vocabulary</h3>
+<ul>
+<li><strong>[R19] <a href="https://learn.microsoft.com/en-us/azure/architecture/data-guide/relational-data/online-analytical-processing">Microsoft Architecture Center: online analytical processing</a></strong>
+Primary reading for lesson 1: read the introduction contrasting transactional work with analytical queries. Use for OLTP/OLAP workload classification; Azure products and cube implementation details are not prerequisites.</li>
+<li><strong>[R20] <a href="https://aws.amazon.com/what-is/data-pipeline/">AWS: what is a data pipeline?</a></strong>
+Definitions of pipeline stages, sources, and destinations. Use to separate the movement/processing workflow from the stores that it reads and writes.</li>
+<li><strong>[R21] <a href="https://aws.amazon.com/what-is/data-mart/">AWS: what is a data mart?</a></strong>
+Distinguishes subject-focused marts from broader warehouses and describes dependent/independent marts. Use for the sales mart example; a mart need not be a separate database server or a dashboard.</li>
+<li><strong>[R22] <a href="https://aws.amazon.com/compare/the-difference-between-etl-and-elt/">AWS: ETL versus ELT</a></strong>
+Use the order and transform-location comparison: transform before versus after loading the analytical destination. Do not generalize the vendor page's performance claims into a rule that one pattern is always faster or better.</li>
+<li><strong>[R23] <a href="https://beam.apache.org/documentation/basics/">Apache Beam: basics of the Beam model</a></strong>
+Read only the PCollection subsection on bounded versus unbounded data. Use to ground batch/streaming definitions; Beam, runners, windows, and distributed processing are not installed or taught in lesson 1.</li>
+</ul>
+<h3 id="source-foundations-and-local-setup">Foundations and local setup</h3>
+<ul>
+<li><strong>[R3] <a href="https://docs.python.org/3/tutorial/venv.html">Python: virtual environments and packages</a></strong>
+Official environment-isolation reference. Use for reproducible local setup; select the Python version supported by the actual adapter/integration set rather than assuming the documentation's newest Python is compatible.</li>
+<li><strong>[R4] <a href="https://dev.mysql.com/doc/refman/8.4/en/tutorial.html">MySQL 8.4 tutorial</a></strong>
+Official source for relational-table creation and SQL practice. Use for source schema, inserts, joins, and baseline reconciliation queries.</li>
+<li><strong>[R5] <a href="https://docs.docker.com/compose/gettingstarted/">Docker Compose quickstart</a></strong>
+Official multi-service local setup guide. Use for service names, networks, configuration, and lifecycle; deployment hardening requires additional work.</li>
+</ul>
+<h3 id="source-lesson-2-windows-wsl-setup">Lesson 2: Windows / WSL setup</h3>
+<ul>
+<li><strong>[R24] <a href="https://learn.microsoft.com/en-us/windows/wsl/install">Microsoft: install WSL</a></strong>
+Official PowerShell installation, restart/Ubuntu first-launch, and distribution-version checks. Use to distinguish the WSL software version from a distribution's WSL 1/2 mode.</li>
+<li><strong>[R25] <a href="https://docs.docker.com/desktop/setup/install/windows-install/">Docker Desktop: Windows installation</a></strong>
+Live Windows-build, architecture, hardware, and installation requirements, plus Desktop subscription terms. Check eligibility before downloading; WSL support alone is insufficient.</li>
+<li><strong>[R26] <a href="https://docs.docker.com/desktop/features/wsl/">Docker Desktop: WSL backend and integration</a></strong>
+Engine selection, Linux containers, and Ubuntu integration; warns against a second Engine installation in WSL. Its <a href="https://docs.docker.com/desktop/features/wsl/best-practices/">WSL best practices</a> explain Linux-home project storage.</li>
+<li><strong>[R27] <a href="https://git-scm.com/install/linux">Git: Linux installation</a></strong>
+Official Debian/Ubuntu package-manager route. Install Git in the development environment rather than silently mixing Windows and Linux toolchains.</li>
+<li><strong>[R28] <a href="https://devguide.python.org/versions/">Python: version support status</a></strong>
+Maintenance phase and end-of-life dates. Python 3.12 was security-supported when lesson 2 was authored; recheck support and integration compatibility before a later upgrade.</li>
+<li><strong>[R29] <a href="https://docs.astral.sh/uv/guides/projects/">Astral uv: working on projects</a></strong>
+Primary lesson 2 reading: distinguish project requirements, uv.lock, and .venv. Follow official <a href="https://docs.astral.sh/uv/getting-started/installation/">installation</a>, <a href="https://docs.astral.sh/uv/guides/install-python/">managed Python</a>, <a href="https://docs.astral.sh/uv/concepts/projects/sync/">locked sync</a>, and <a href="https://docs.astral.sh/uv/concepts/projects/config/#project-environment-path">environment-path</a> references for the single selected workflow. Locking does not prove full-stack compatibility.</li>
+<li><strong>[R30] <a href="https://dlthub.com/docs/reference/installation">dlt: installation and Python support</a></strong>
+Official runtime support and base-library installation. In lesson 2, dlt core demonstrates a real dependency lock; no SQL drivers or database integration are validated yet.</li>
+<li><strong>[R31] <a href="https://docs.docker.com/compose/install/">Docker: Compose installation options</a></strong>
+Confirms Docker Desktop bundles Engine, CLI, and Compose. Use the Compose plugin; avoid adding a legacy standalone installation for this path.</li>
+</ul>
+<h3 id="source-ingestion-and-clickhouse">Ingestion and ClickHouse</h3>
+<ul>
+<li><strong>[R6] <a href="https://dlthub.com/docs/dlt-ecosystem/destinations/clickhouse">dlt: ClickHouse destination</a></strong>
+Official destination installation, write dispositions, engines, and deduplication behavior. Use before choosing merge or append behavior; destination support must be checked against the pinned versions.</li>
+<li><strong>[R7] <a href="https://dlthub.com/docs/dlt-ecosystem/verified-sources/sql_database/advanced">dlt: SQL database advanced usage</a></strong>
+Source configuration, incremental cursors, chunking, and bounded loads. Use for MySQL extraction and controlled backfills.</li>
+<li><strong>[R8] <a href="https://dlthub.com/docs/general-usage/incremental-loading">dlt: incremental loading</a></strong>
+Official explanation of full loads, append, merge, and pipeline state. Use to distinguish reading changed rows from how those rows are written to the destination.</li>
+<li><strong>[R9] <a href="https://clickhouse.com/docs/engines/table-engines/mergetree-family/mergetree">ClickHouse: MergeTree</a></strong>
+Official explanation of parts, background merges, sorting keys, sparse indexes, and partitions. Explicitly notes that primary keys need not be unique. Use for correctness and query-performance experiments.</li>
+</ul>
+<h3 id="source-dbt-and-dagster">dbt and Dagster</h3>
+<ul>
+<li><strong>[R10] <a href="https://clickhouse.com/docs/integrations/dbt">ClickHouse: dbt integration</a></strong>
+Official ClickHouse adapter and materialization overview. Use to select <code>dbt-clickhouse</code> and verify supported dbt versions/features; do not copy another warehouse's incremental SQL uncritically.</li>
+<li><strong>[R11] <a href="https://docs.getdbt.com/docs/build/data-tests">dbt: data tests</a></strong>
+Official reference for generic and SQL data tests, including unique, not_null, accepted_values, and relationships. Use for schema expectations and business invariants.</li>
+<li><strong>[R12] <a href="https://docs.dagster.io/integrations/libraries/dlt">Dagster: dlt integration</a></strong>
+Official integration documentation. Use to expose dlt ingestion through Dagster assets; follow the API style appropriate to the locked integration version.</li>
+<li><strong>[R13] <a href="https://docs.dagster.io/integrations/libraries/dbt">Dagster: dbt integration</a></strong>
+Official model/asset integration, dependency, and execution reference. Use to connect transformations to ingestion without duplicating the SQL in Python.</li>
+<li><strong>[R14] <a href="https://docs.dagster.io/deployment/oss/deployment-options/docker">Dagster: Docker Compose deployment</a></strong>
+Official deployment topology for webserver, daemon, and user code. Its example includes PostgreSQL; the course proposes MySQL metadata storage instead, so do not copy the example unchanged or its sample image tags as current recommendations.</li>
+<li><strong>[R15] <a href="https://docs.dagster.io/deployment/oss/oss-instance-configuration">Dagster: instance configuration</a></strong>
+Official persistent storage, run monitoring, and retry configuration. Documents MySQL storage with <code>dagster-mysql</code>; use a separate metadata database and credentials.</li>
+</ul>
+<h3 id="source-applications-and-operations">Applications and operations</h3>
+<ul>
+<li><strong>[R16] <a href="https://docs.streamlit.io/develop/concepts/connections/connecting-to-data">Streamlit: connecting to data</a></strong>
+Official Python/database access, connection, secrets, and caching guidance. Use for a read-only dashboard and honest display of data freshness.</li>
+<li><strong>[R17] <a href="https://reflex.dev/docs/hosting/self-hosting/">Reflex: self-hosting</a></strong>
+Official production hosting and frontend/backend connectivity guide. Use for app deployment, secrets, and WebSocket routing; topology is version-dependent.</li>
+<li><strong>[R18] <a href="https://clickhouse.com/docs/operations/system-tables/query_log">ClickHouse: system.query_log</a></strong>
+Official query-log field reference. Use for measuring query duration, rows/bytes read, errors, and performance regressions; protect logs because queries may contain sensitive information.</li>
+</ul>
+<h2 id="source-wisdom-communities">Wisdom (Communities)</h2>
+<p>Optional review opportunities, not required accounts or paid services:</p>
+<ul>
+<li><a href="https://dlthub.com/community">dlt community</a>
+Ask for feedback on a minimal reproducible ingestion/state problem after reproducing it locally. Linked by the official dlt documentation.</li>
+<li><a href="https://www.getdbt.com/community">dbt community</a>
+Seek review of a small grain/modeling decision and its tests; never post credentials or real customer data.</li>
+<li><a href="https://dagster.io/community">Dagster community</a>
+Ask practitioners to critique a small asset graph, scheduling decision, or recovery runbook rather than an entire unexplained repository.</li>
+</ul>
+<h2 id="source-gaps">Gaps</h2>
+<ul>
+<li>No combined version matrix has been installed or integration-tested. Establish and lock it in milestone 1.</li>
+<li>Windows / WSL and 16+ GB RAM are learner-reported; Docker is not installed. Exact build, architecture, virtualization, disk space, and installation results remain unverified. Budget is deferred. The proposed single-host deployment is a portfolio exercise, not a high-availability design.</li>
+<li>Recheck provider-specific TLS, authentication, backups, and alert-delivery documentation once hosting is selected.</li>
+<li>Community activity and suitability have not been independently assessed; joining is optional.</li>
+</ul>
+</div></details>
+      </section>
+      <footer class="page-footer"><p><strong>Your next step:</strong> <a href="lessons/0001-from-order-to-insight.html">Trace one order in lesson 1.</a> Explain the architecture before setting up your local source.</p><p>Portable study guide · <a href="MISSION.md">Learning mission</a> · <a href="RESOURCES.md">Resource notes</a> · <a href="#main">Back to the top</a></p></footer>
+    </main>
+  </div>
+</body>
+</html>

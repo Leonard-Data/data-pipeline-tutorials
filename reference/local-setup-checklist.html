@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local setup checklist — Factory Data Lab reference</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main class="reference-sheet" id="main">
+    <p><a href="../lessons/0002-reproducible-local-setup.html">Return to lesson 2</a> · <a href="glossary.html">Course glossary</a></p>
+    <h1>A local setup you can verify.</h1>
+    <p>Windows / WSL 2 · Ubuntu · Docker Desktop · uv · Python 3.12 baseline. Checks only; use the lesson for installation.</p>
+    <h2 id="preflight">Before installation</h2>
+    <ul><li>Record Windows edition/build, CPU architecture, virtualization, RAM, and actual host-drive free space. Compare the build/architecture with <a href="https://docs.docker.com/desktop/setup/install/windows-install/#system-requirements">Docker’s live requirements</a>; on Windows ARM, pause for a specific support check.</li><li>16+ GB RAM is reported, not full-stack capacity proof. Course allowance: 20 GB free, not a vendor minimum. WSL capacity does not prove host free space.</li><li>Budget is deferred: no paid provisioning. Check Desktop licensing and administrator policy. Stop on unsupported hardware, blocked permissions, or unclear eligibility.</li></ul>
+    <h2 id="checks">Match the command to its terminal</h2>
+    <div class="table-scroll" role="region" aria-label="Terminal checks" tabindex="0"><table class="terminal-checks"><thead><tr><th scope="col">Terminal</th><th scope="col">Check</th><th scope="col">Required observation</th></tr></thead><tbody>
+      <tr><th scope="row">PowerShell</th><td><code>winver</code><br><code>wsl --version</code><br><code>wsl --list --verbose</code></td><td>Supported Windows build; supported WSL release; Ubuntu distribution in VERSION 2 mode. Follow <a href="https://learn.microsoft.com/en-us/windows/wsl/install">Microsoft’s setup guide</a> if missing.</td></tr>
+      <tr><th scope="row">Ubuntu</th><td><code>uname -m</code><br><code>free -h</code><br><code>df -h "$HOME"</code></td><td>Record Linux architecture, visible memory, and filesystem space. Keep project files in Linux home.</td></tr>
+      <tr><th scope="row">Ubuntu</th><td><code>git --version</code><br><code>uv --version</code></td><td>Both tools work in Ubuntu. Install only missing tools from their official sources.</td></tr>
+      <tr><th scope="row">Ubuntu lab</th><td><code>uv run --locked python --version</code><br><code>uv run --locked python check_environment.py</code></td><td>Python 3.12.x, Isolated: True, Environment: .venv. The lesson supplies the check file.</td></tr>
+      <tr><th scope="row">Ubuntu lab</th><td><code>uv sync --locked</code></td><td>The lock matches requirements and is unchanged. Use the lesson’s guarded .venv-replay exercise to prove a separate installation without deleting the first.</td></tr>
+      <tr><th scope="row">Ubuntu</th><td><code>docker version</code><br><code>docker compose version</code><br><code>docker run --rm hello-world</code></td><td>Client and Server succeed; Compose is available; “Hello from Docker!” appears. A CLI version alone is insufficient.</td></tr>
+    </tbody></table></div>
+    <h2 id="records">Keep the recipe. Rebuild the environment.</h2>
+    <p><strong>Version:</strong> <code>pyproject.toml</code> (requirements), <code>.python-version</code> (Python minor selection), <code>uv.lock</code> (resolved dependencies), the check script, and ignore rules. <strong>Ignore:</strong> <code>.venv/</code>, <code>.venv-replay/</code>, <code>.env</code>, and <code>.dlt/secrets.toml</code>. Record the actual Python patch and installed dlt version.</p>
+    <p><strong>Stop rather than bypass:</strong> investigate an outdated lock; never delete it to hide a mismatch. Do not install a second Docker Engine in Ubuntu, weaken socket permissions, expose an unauthenticated daemon, or prune existing data. Desktop must run on Windows with Ubuntu WSL integration.</p>
+    <footer class="page-footer"><p>Sources: <a href="https://docs.astral.sh/uv/guides/projects/">uv project structure</a> · <a href="https://docs.astral.sh/uv/concepts/projects/sync/">locked sync</a> · <a href="https://docs.docker.com/desktop/features/wsl/">Docker WSL integration</a> · <a href="https://docs.python.org/3/library/venv.html#how-venvs-work">Python isolation</a>.</p><p>Send versions, results, blockers, and your lock/environment explanation to the teaching agent. No passwords or personal identifiers. Review tomorrow and next week. Full-stack compatibility remains unverified.</p></footer>
+  </main>
+</body>
+</html>

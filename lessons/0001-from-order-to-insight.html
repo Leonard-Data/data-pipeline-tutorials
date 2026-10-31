@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lesson 1: trace an ice cream factory order through OLTP, a pipeline, a warehouse, and a mart. Compare batch/streaming and ETL/ELT with short interactive exercises.">
+  <title>Lesson 1 · From one order to an insight — Factory Data Lab</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/course.js" defer></script>
+  <script src="../assets/lesson.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the lesson</a>
+  <header class="site-header">
+    <a class="wordmark" href="../index.html">Factory <span>Data Lab</span></a>
+    <div class="header-links"><a href="../index.html#curriculum">Course roadmap</a><button type="button" data-print hidden>Print lesson</button></div>
+  </header>
+  <main class="lesson-shell" id="main">
+    <h1>One order.<br>Two different jobs.</h1>
+    <ul class="course-meta" aria-label="Lesson information"><li>Lesson 1 · M1 / week 1</li><li>About 20 minutes</li><li>No database setup</li></ul>
+    <p class="lede">A shop orders ice cream. The cashier needs to record it; the factory manager wants to understand sales. Follow that order from transaction to analytical answer.</p>
+    <p><strong>Your win:</strong> draw the path, label each component, and explain <em>what work happens, where it happens, and when it happens</em>.</p>
+    <nav class="lesson-jumps" aria-label="Lesson sections"><a href="#workloads">Workloads</a><a href="#data-path">Data path</a><a href="#etl-elt">Work order</a><a href="#batch-streaming">Timing</a><a href="#pipeline-example">Code along</a><a href="#practice">Recall</a></nav>
+
+    <section class="chapter" id="workloads" aria-labelledby="workloads-title">
+      <h2 id="workloads-title">OLTP records business. OLAP explains it.</h2>
+      <p><strong>OLTP</strong> means <em>online transaction processing</em>: short operational actions, such as saving an order, changing its status, or looking up one customer's order. <strong>OLAP</strong> means <em>online analytical processing</em>: analysis across data, such as comparing sales by flavor over a year. <a href="https://learn.microsoft.com/en-us/azure/architecture/data-guide/relational-data/online-analytical-processing">Microsoft’s explanation</a> grounds this distinction.</p>
+      <div class="table-scroll"><table><caption>Two jobs at the same ice cream factory</caption><thead><tr><th scope="col">Question</th><th scope="col">Workload</th><th scope="col">Our project choice</th></tr></thead><tbody><tr><td>“Has order 100 shipped?”</td><td>OLTP: a focused operational lookup</td><td>MySQL source tables</td></tr><tr><td>“Which flavor sold most this quarter?”</td><td>OLAP: aggregate and compare many records</td><td>ClickHouse analytical models</td></tr></tbody></table></div>
+      <p class="margin-note"><strong>Do not memorize “writes versus reads.”</strong> An OLTP lookup is a read, too. These are workload descriptions, not immutable product labels. Small reports can run in MySQL; we separate analytics here to learn the architecture and its trade-offs.</p>
+    </section>
+
+    <section class="chapter" id="data-path" aria-labelledby="path-title">
+      <h2 id="path-title">A pipeline moves data. A warehouse holds it.</h2>
+      <p>A <strong>pipeline</strong> is the repeatable workflow that moves and processes data. A <strong>warehouse</strong> integrates analytical data for questions across the business. A <strong>mart</strong> is a focused analytical dataset: here, daily sales for the manager. A mart is not the dashboard itself. <a href="https://aws.amazon.com/what-is/data-pipeline/">Pipeline stages</a> · <a href="https://aws.amazon.com/what-is/data-mart/">Warehouse versus mart</a>.</p>
+      <figure class="architecture">
+        <ol class="pipeline" aria-label="Follow order 100 from the source to a sales mart">
+          <li><details><summary><span class="stage-role">Operational source</span><strong>MySQL</strong><span class="stage-action">Order 100 is recorded</span></summary><p>Order headers and lines describe what the shop ordered and its shipping status. Recording and looking up this order are OLTP work.</p></details></li>
+          <li><details><summary><span class="stage-role">Extract + load</span><strong>dlt</strong><span class="stage-action">Copy selected rows</span></summary><p>This is part of the pipeline, not the warehouse. It reads the source and loads the destination.</p></details></li>
+          <li><details><summary><span class="stage-role">Warehouse: raw</span><strong>ClickHouse</strong><span class="stage-action">Keep source-shaped rows</span></summary><p>The loaded rows are not yet the final business answer. Raw data gives us a starting point for transformations and reconciliation.</p></details></li>
+          <li><details><summary><span class="stage-role">Transform</span><strong>dbt</strong><span class="stage-action">Define sales in SQL</span></summary><p>Run SQL in ClickHouse: select shipped lines, calculate metrics, and group by day. dbt is not another storage database.</p></details></li>
+          <li><details><summary><span class="stage-role">Warehouse: mart</span><strong>Daily sales</strong><span class="stage-action">An answer ready to query</span></summary><p>The sales mart can be a table or view inside the same warehouse. Streamlit and Reflex read it; they do not become the mart.</p></details></li>
+        </ol>
+        <figcaption>Read left to right, or top to bottom on a phone. Raw data and the mart can live in the same ClickHouse instance. Open any stage for its responsibility.</figcaption>
+      </figure>
+      <h3>Source and destination are relative to a step.</h3>
+      <div class="table-scroll"><table><thead><tr><th scope="col">Step</th><th scope="col">Source: read from</th><th scope="col">Destination: write to</th></tr></thead><tbody><tr><td>dlt loads source tables</td><td>MySQL tables</td><td>Raw ClickHouse tables</td></tr><tr><td>dbt builds a sales mart</td><td>Raw/staging tables in ClickHouse</td><td>The sales mart in ClickHouse</td></tr></tbody></table></div>
+      <p>The same warehouse is the <strong>destination of ingestion</strong> and contains the <strong>source of transformation</strong>. “Destination” does not automatically mean “finished” or “correct.” Dagster will coordinate these steps later; orchestration is not storage.</p>
+      <p class="margin-note">Keep the <a href="../reference/glossary.html#glossary-source-destination">source/destination definition</a> and the <a href="../reference/architecture-first-steps.html#path">printable path</a> close when drawing your own version.</p>
+    </section>
+
+    <section class="chapter" id="etl-elt" aria-labelledby="order-title">
+      <h2 id="order-title">ETL or ELT: where does transformation happen?</h2>
+      <p><strong>Extract</strong> reads the source. <strong>Load</strong> writes to the analytical destination. <strong>Transform</strong> changes structure or business meaning: filter cancelled lines, calculate net sales, or group by day. The important difference is the order around loading the destination. <a href="https://aws.amazon.com/compare/the-difference-between-etl-and-elt/">ETL/ELT comparison</a>.</p>
+      <div class="transform-path"><strong>ETL</strong><ol aria-label="ETL sequence"><li>Extract</li><li class="transform-step">Transform</li><li>Load</li></ol><p>Prepare the data before it lands in the analytical destination.</p></div>
+      <div class="transform-path"><strong>ELT</strong><ol aria-label="ELT sequence"><li>Extract</li><li>Load</li><li class="transform-step">Transform</li></ol><p>Land source-oriented data first; transform it within the warehouse.</p></div>
+      <p><strong>Our project uses ELT:</strong> dlt loads source rows into ClickHouse, then dbt builds analytical models there. Use this when warehouse SQL and keeping source-oriented data serve the requirements.</p>
+      <p><strong>When would you change the order?</strong> If a contract forbids customer names in the analytical destination, remove or replace those names <em>before</em> loading it. That is an ETL-style transformation at this boundary. You can still perform further transformations afterward.</p>
+      <p class="margin-note">ELT does not mean “skip validation and load secrets.” Neither pattern is universally faster, safer, or better. Loading can include technical normalization without changing our overall ELT classification.</p>
+    </section>
+
+    <section class="chapter" id="batch-streaming" aria-labelledby="timing-title">
+      <h2 id="timing-title">Batch or streaming: when does data move?</h2>
+      <p><strong>Batch</strong> processes a bounded group of data: for example, all rows selected for an hourly run. <strong>Streaming</strong> processes a continuing flow of events as they arrive. Shorter batch intervals are still batches; streaming is not a promise of zero delay. <a href="https://beam.apache.org/documentation/basics/#pcollection">Beam’s bounded/unbounded distinction</a>.</p>
+      <p>For an hourly sales report, start with batch. For a requirement to react to new events within seconds, investigate streaming and its operational cost. Timing is separate from ETL/ELT: <strong>a pipeline can be both batch and ELT</strong>, as ours will be.</p>
+      <div class="delivery-lab" data-delivery-lab>
+        <h3>Predict which result changes.</h3>
+        <p class="margin-note">Synthetic browser model: the event consumer handles arrivals immediately for illustration; the batch waits for your simulated scheduled run. No real database, clock, or streaming service is running.</p>
+        <dl class="delivery-counts"><div><dt>Orders received</dt><dd><output id="source-count" data-source-count>0</output></dd></div><div><dt>Seen by hourly batch</dt><dd><output id="batch-count" data-batch-count>0</output></dd></div><div><dt>Seen by event consumer</dt><dd><output id="stream-count" data-stream-count>0</output></dd></div></dl>
+        <div class="button-row" data-delivery-controls hidden><button type="button" class="primary-button" data-receive>Receive an order</button><button type="button" data-run-batch>Run the scheduled batch</button><button type="button" data-reset-delivery>Reset arrivals</button></div>
+        <p class="feedback" data-delivery-feedback role="status">Predict: receive three orders without running the batch. Which consumer is behind?</p>
+        <noscript><p>Without JavaScript: after three arrivals, the event consumer has seen three orders and the batch has seen zero. After the scheduled run, both have seen three.</p></noscript>
+      </div>
+    </section>
+
+    <section class="chapter" id="pipeline-example" aria-labelledby="code-title">
+      <h2 id="code-title">Code along: same answer, different path.</h2>
+      <p>Save this as <code>first_pipeline.py</code> and run <code>python3 first_pipeline.py</code>. It uses only Python’s standard library. Lists and dictionaries <em>stand in for</em> storage; this is not a real warehouse or a dlt/dbt implementation.</p>
+      <p>Predict first: three source lines include one cancellation. Should the sales mart count all three? Amounts are synthetic USD cents; the shipped lines total $45.00.</p>
+      <p id="copy-feedback" class="sr-only" role="status"></p>
+      <pre><code class="language-python">source_rows = [
+    {"line_id": 1, "status": "shipped", "net_cents": 1800},
+    {"line_id": 2, "status": "shipped", "net_cents": 2700},
+    {"line_id": 3, "status": "cancelled", "net_cents": 5000},
+]
+
+def summarize(rows):
+    shipped = [row for row in rows if row["status"] == "shipped"]
+    return {
+        "shipped_lines": len(shipped),
+        "net_cents": sum(row["net_cents"] for row in shipped),
+    }
+
+# ELT: copy source-shaped rows into our pretend warehouse, then transform.
+warehouse_raw = [row.copy() for row in source_rows]
+mart_elt = summarize(warehouse_raw)
+
+# ETL: transform first, then load the resulting summary.
+prepared_before_load = summarize(source_rows)
+mart_etl = prepared_before_load.copy()
+
+expected = {"shipped_lines": 2, "net_cents": 4500}
+assert mart_elt == expected
+assert mart_etl == expected
+assert len(warehouse_raw) == 3
+print(mart_elt)
+</code></pre>
+      <p><strong>Expected output:</strong> <code>{'shipped_lines': 2, 'net_cents': 4500}</code>. The answers agree; the order and retained raw data differ.</p>
+      <p><strong>Your variation:</strong> add a shipped line worth 900 cents. Predict the new result, update <code>expected</code>, and run again. The existing raw-row count assertion must change too. Why?</p>
+      <details class="handbook"><summary>Check the variation after trying it</summary><div class="handbook-body"><p>The mart has <strong>3 shipped lines and 5400 cents ($54.00)</strong>. Raw data has <strong>4 rows</strong>, including the cancelled line. Update the raw-row assertion to 4. A filtered summary is not the same dataset as the source.</p></div></details>
+    </section>
+
+    <section class="chapter" id="practice" aria-labelledby="practice-title">
+      <h2 id="practice-title">Close the notes. Retrieve the ideas.</h2>
+      <p>These are practice questions, not evidence of mastery just because you opened the page. Explain the reason before checking. Revisit them tomorrow and again next week.</p>
+      <noscript><p>Choose your answers, then open the answer key below. Automatic feedback needs JavaScript.</p></noscript>
+      <form class="lesson-quiz" data-quiz data-correct="oltp" id="q-workload">
+        <fieldset><legend>1. A cashier looks up one order’s shipping status. Which workload is this?</legend>
+          <label><input type="radio" name="workload" value="oltp" data-feedback="A focused operational lookup is OLTP, even though it reads rather than writes."> OLTP transaction processing</label>
+          <label><input type="radio" name="workload" value="olap" data-feedback="This lookup is not a trend or aggregate across many records. OLTP can include reads."> OLAP trend analysis</label>
+          <label><input type="radio" name="workload" value="batch" data-feedback="No group of records is being extracted here; this is an operational lookup."> Batch file extraction</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="mart" id="q-mart">
+        <fieldset><legend>2. A daily-sales table serves the sales manager inside ClickHouse. What is its analytical role?</legend>
+          <label><input type="radio" name="mart" value="pipeline" data-feedback="A pipeline is the workflow that builds the table, not the resulting analytical dataset."> A scheduling pipeline</label>
+          <label><input type="radio" name="mart" value="mart" data-feedback="A subject-focused analytical dataset is a mart; it can live inside the warehouse."> A sales mart</label>
+          <label><input type="radio" name="mart" value="source" data-feedback="For this question, classify its business-facing analytical role, not its possible role as input to another step."> A transactional source</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="source" id="q-source">
+        <fieldset><legend>3. dbt reads a raw ClickHouse table to build a mart. What is that raw table for this step?</legend>
+          <label><input type="radio" name="source" value="dashboard" data-feedback="A dashboard displays results. This raw table is input to a transformation."> The final dashboard</label>
+          <label><input type="radio" name="source" value="schedule" data-feedback="A schedule decides when work runs; this table supplies the data."> The orchestration schedule</label>
+          <label><input type="radio" name="source" value="source" data-feedback="The raw table is read by the transformation, so it is this step’s source. The mart is its destination."> The transformation source</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="batch" id="q-batch">
+        <fieldset><legend>4. Every hour, a job selects and processes a bounded set of new rows. What is the processing pattern?</legend>
+          <label><input type="radio" name="batch" value="stream" data-feedback="Frequent runs do not by themselves make streaming. Each run handles a bounded selection."> Continuous stream processing</label>
+          <label><input type="radio" name="batch" value="batch" data-feedback="Each scheduled run handles a bounded group. Faster schedules can still be batch processing."> Scheduled batch processing</label>
+          <label><input type="radio" name="batch" value="transaction" data-feedback="This describes a data-processing schedule, not an interactive operational transaction."> Interactive transaction processing</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="elt" id="q-order">
+        <fieldset><legend>5. dlt loads source-shaped rows into ClickHouse; dbt then calculates daily sales there. Which order is this?</legend>
+          <label><input type="radio" name="order" value="elt" data-feedback="Loading the analytical destination precedes the business transformation: ELT."> Extract load transform</label>
+          <label><input type="radio" name="order" value="etl" data-feedback="ETL puts this business transformation before loading the analytical destination."> Extract transform load</label>
+          <label><input type="radio" name="order" value="neither" data-feedback="There is a clear load-then-transform sequence here, so the pattern is ELT."> Neither loading pattern</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <form class="lesson-quiz" data-quiz data-correct="before" id="q-privacy">
+        <fieldset><legend>6. A contract forbids customer names in the analytical destination. Where must their removal happen?</legend>
+          <label><input type="radio" name="privacy" value="after" data-feedback="Removing prohibited data afterward is too late: the destination would already have received it."> Transform after loading</label>
+          <label><input type="radio" name="privacy" value="unfiltered" data-feedback="A preferred architecture never overrides the contract’s data boundary."> Load without filtering</label>
+          <label><input type="radio" name="privacy" value="before" data-feedback="Remove or replace prohibited names before this boundary. Later warehouse transformations can still follow."> Transform before loading</label>
+        </fieldset><div data-quiz-controls hidden><button type="submit">Check answer</button><p class="feedback" data-quiz-feedback role="status">Choose from memory, then check.</p></div>
+      </form>
+      <details class="handbook" id="answer-key"><summary>Answer key · open after attempting the questions</summary><div class="handbook-body"><ol><li><strong>OLTP transaction processing.</strong> A short operational lookup can be a read.</li><li><strong>A sales mart.</strong> A focused dataset; not a separate server requirement.</li><li><strong>The transformation source.</strong> Source/destination are relative to the step.</li><li><strong>Scheduled batch processing.</strong> Frequency alone does not define streaming.</li><li><strong>Extract load transform.</strong> The business transformation follows the load.</li><li><strong>Transform before loading.</strong> Respect the contract before the data crosses the boundary.</li></ol></div></details>
+    </section>
+
+    <section class="chapter" id="finish" aria-labelledby="finish-title">
+      <h2 id="finish-title">Now explain the whole path.</h2>
+      <p>Without looking, draw <strong>MySQL → dlt → raw ClickHouse → dbt → sales mart → dashboard</strong>. Mark the OLTP and OLAP work, one source/destination pair, the load/transform order, and your refresh timing.</p>
+      <p><strong>Exit question:</strong> the manager needs a refreshed sales report every hour. Why is batch ELT a reasonable starting point—and what requirement would make you reconsider it?</p>
+      <p>Send your explanation to the teaching agent for feedback. Ask follow-up questions whenever a term or trade-off is unclear. Your learning record is updated from demonstrated understanding, not page views.</p>
+      <p><a href="../reference/architecture-first-steps.html">Keep the one-page architecture reference</a> · <a href="../reference/glossary.html">Open the course glossary</a></p>
+    </section>
+
+    <section class="chapter" id="reading" aria-labelledby="reading-title">
+      <h2 id="reading-title">One primary reading, then optional depth.</h2>
+      <p><strong>Recommended:</strong> the opening explanation in <a href="https://learn.microsoft.com/en-us/azure/architecture/data-guide/relational-data/online-analytical-processing">Microsoft’s Online Analytical Processing guide</a>. Stop before the platform-specific implementation sections; classify its examples as operational or analytical.</p>
+      <ul class="resource-list"><li><a href="https://aws.amazon.com/what-is/data-pipeline/">AWS: data pipeline</a> — sources, destinations, and processing stages.</li><li><a href="https://aws.amazon.com/what-is/data-mart/">AWS: data mart</a> — focused analytical data versus a broader warehouse.</li><li><a href="https://aws.amazon.com/compare/the-difference-between-etl-and-elt/">AWS: ETL versus ELT</a> — focus on ordering and transformation location, not blanket performance claims.</li><li><a href="https://beam.apache.org/documentation/basics/#pcollection">Apache Beam: bounded versus unbounded collections</a> — read that subsection only. No Beam setup is needed.</li></ul>
+    </section>
+    <footer class="page-footer"><p><strong>Next:</strong> after you can explain the path, open <a href="0002-reproducible-local-setup.html">Lesson 2: reproducible local setup</a>. Verify your Windows / WSL workspace before the database labs. The <a href="../simulator/README.md">deterministic source fixture</a> is already available.</p><p><a href="../index.html#curriculum">Back to the syllabus</a> · <a href="../reference/architecture-first-steps.html">Lesson reference</a> · <a href="#main">Back to the top</a></p></footer>
+  </main>
+</body>
+</html>

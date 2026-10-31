@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture first steps — Factory Data Lab reference</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main class="reference-sheet" id="main">
+    <p><a href="../lessons/0001-from-order-to-insight.html">Return to lesson 1</a> · <a href="glossary.html">Full glossary</a></p>
+    <h1>Trace the data before choosing the tools.</h1>
+    <p>Lesson 1 reference · Ice cream factory analytics · Print using your browser’s Print command.</p>
+    <h2 id="path">One project, one path</h2>
+    <p><strong>MySQL → dlt → raw ClickHouse → dbt → sales mart → dashboard.</strong> dlt moves selected rows; dbt transforms them inside ClickHouse. Raw data and marts can share one warehouse. The dashboard reads the mart; it is not the mart.</p>
+    <div class="table-scroll"><table><caption>The questions to ask when reviewing an architecture</caption><thead><tr><th scope="col">Concept</th><th scope="col">Definition / decision</th><th scope="col">Factory example</th></tr></thead><tbody>
+      <tr><th scope="row">OLTP / OLAP</th><td>Operational transactions and focused lookups / analytical calculations and comparisons.</td><td>Check order 100 / compare a year of sales by flavor.</td></tr>
+      <tr><th scope="row">Pipeline</th><td>The repeatable movement and processing workflow, not a storage table.</td><td>Extract, load, transform, and check.</td></tr>
+      <tr><th scope="row">Warehouse / mart</th><td>Broader integrated analytical data / a focused business dataset.</td><td>Sales, production, and inventory / daily sales.</td></tr>
+      <tr><th scope="row">Source / destination</th><td>Read from / write to, relative to a particular step.</td><td>Raw ClickHouse tables are ingestion’s destination and transformation’s source.</td></tr>
+      <tr><th scope="row">Batch / streaming</th><td>Bounded groups processed in runs / a continuing event flow.</td><td>Hourly sales refresh / continuously process arriving events.</td></tr>
+      <tr><th scope="row">ETL / ELT</th><td>Extract, transform, load / extract, load, transform. Locate transformation relative to the analytical destination.</td><td>Remove forbidden fields before loading / load raw rows, then model sales in SQL.</td></tr>
+    </tbody></table></div>
+    <h2 id="decisions">Three questions, three separate decisions</h2>
+    <ol><li><strong>What work?</strong> Operational transactions or analytical questions?</li><li><strong>Where transform?</strong> Before or after loading the analytical destination?</li><li><strong>When process?</strong> Scheduled bounded runs or a continuing event flow?</li></ol>
+    <p><strong>Our starting point:</strong> MySQL handles OLTP; ClickHouse supports OLAP; the analytical pipeline is batch ELT. These labels answer different questions and can coexist.</p>
+    <p class="margin-note"><strong>Avoid shortcuts in reasoning:</strong> OLTP can read. A mart need not have its own server. Faster polling is still polling. ELT never overrides a rule against storing prohibited data. Streaming is not a zero-latency guarantee.</p>
+    <footer class="page-footer">
+      <p>Sources: <a href="https://learn.microsoft.com/en-us/azure/architecture/data-guide/relational-data/online-analytical-processing">Microsoft: OLAP/OLTP</a> · <a href="https://aws.amazon.com/what-is/data-pipeline/">AWS: pipelines</a> · <a href="https://aws.amazon.com/what-is/data-mart/">AWS: marts</a> · <a href="https://aws.amazon.com/compare/the-difference-between-etl-and-elt/">AWS: ETL/ELT</a> · <a href="https://beam.apache.org/documentation/basics/#pcollection">Beam: bounded/unbounded</a></p>
+      <p>Ask your teaching agent when a boundary or trade-off is unclear. <a href="../lessons/0001-from-order-to-insight.html#practice">Practice retrieval</a> · <a href="../index.html">Course syllabus</a></p>
+    </footer>
+  </main>
+</body>
+</html>
